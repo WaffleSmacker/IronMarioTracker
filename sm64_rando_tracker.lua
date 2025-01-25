@@ -704,7 +704,7 @@ while true do
         for i = 1, 100 do  -- Adjust the number to spam more or fewer instances
             local middle_x = math.floor(game_width / 2) - 200
             local middle_y = screen_height - math.floor(screen_height / 6)
-            gui.drawText(middle_x, middle_y  - 200, "TAINT DETECTED", "red", nil, 40, "Arial", "bold")  -- Large red text
+            gui.drawText(middle_x, middle_y  - 200, "TAINT DETECTED", "red", nil, 40, "Arial", "bold")
         end
     end
 
@@ -725,30 +725,38 @@ while true do
     gui.text(right_panel_x, right_panel_y_start + 7 * right_panel_vspace, "PB Stars: " .. displayData.pbStars, "yellow")
 
 
-    gui.text(right_panel_x, right_panel_y_start + 8 * right_panel_vspace, "== Stars Collected ==", "yellow")
-    -- Display total stars collected per level
-    if next(starTracker) then  -- Check if the starTracker table has any entries
-        local line = 10
-        local starCountLines = 1  -- Start with the header line
-        for levelAbbr, starCount in pairs(starTracker) do
-            -- Only display levels with at least one star collected
-            if starCount > 0 then
-                gui.text(right_panel_x + 30, right_panel_y_start + line * right_panel_vspace, string.format("%s: %d", levelAbbr, starCount))
-                line = line + 1
-                starCountLines = starCountLines + 1  -- Increment for each star count line
-            end
+    local warpCountLines = 0
+
+    -- Display the "WarpMapping" header first, even if there is no data
+    local warpMappingStartLine = 9  -- Start warp mapping at line 9
+    gui.text(right_panel_x, right_panel_y_start + warpMappingStartLine * right_panel_vspace, "== WarpMapping ==", "orange")
+
+    -- Display warp mapping data if available
+    if next(warp_log) then  -- Ensure warp_log has entries to iterate
+        local warpMappingLine = warpMappingStartLine + 1  -- Start 2 lines after the WarpMapping header
+
+        for warpFrom, warpTo in pairs(warp_log) do
+            gui.text(right_panel_x + 30, right_panel_y_start + warpMappingLine * right_panel_vspace, string.format("%s -> %s", warpFrom, warpTo))
+            warpMappingLine = warpMappingLine + 1
+            warpCountLines = warpCountLines + 1  -- Increment for each warp line
         end
     end
 
-    -- Calculate the starting position for WarpMapping dynamically
-    local warpMappingStartLine = 12 + (starCountLines or 0)
+    -- Calculate the starting position for star tracking dynamically
+    local starTrackingStartLine = 11 + warpCountLines  -- Ensure star tracking starts after warp mapping
 
-    -- Display warp mapping
-    gui.text(right_panel_x, right_panel_y_start + warpMappingStartLine * right_panel_vspace, "== WarpMapping ==", "orange")
-    local warpMappingLine = warpMappingStartLine + 2  -- Start 2 lines after the WarpMapping header
-    for warpFrom, warpTo in pairs(warp_log) do
-        gui.text(right_panel_x + 30, right_panel_y_start + warpMappingLine * right_panel_vspace, string.format("%s -> %s", warpFrom, warpTo))
-        warpMappingLine = warpMappingLine + 1
+    -- Display the "Stars Collected" header
+    gui.text(right_panel_x, right_panel_y_start + starTrackingStartLine * right_panel_vspace, "== Stars Collected ==", "yellow")
+
+    -- Display star tracking data
+    if next(starTracker) then  -- Check if the starTracker table has any entries
+        local starLine = starTrackingStartLine + 1  -- Start star tracking below the header
+
+        for levelAbbr, starCount in pairs(starTracker) do
+            -- Only display levels with at least one star collected
+            gui.text(right_panel_x + 30, right_panel_y_start + starLine * right_panel_vspace, string.format("%s: %d", levelAbbr, starCount))
+            starLine = starLine + 1
+        end
     end
 
 
@@ -767,45 +775,3 @@ while true do
     
 end
 
-
-
-
--- Config -> Controllers -> Analog Controls -> P1 X Axis  (click bind, then move joystick, repeat with below P1 Y Axis)
--- Remove any hotkeys you have set up for moving Up Right Left Down  (Config -> Hotkeys)
-
--- Make screen larger
--- Plugins -> Video Resolution (recommmend 1024 x 768)
-
-
--- Mario Actions Notes
--- 201327107 -- sleep
--- 201327108 -- waking up
--- 205521409 -- standing
--- 205521410 -- yawning
-
--- 67109952 -- moving --(run, walk, slow walk)
--- 50333824 -- first jump
--- 50333825 -- second jump
--- 16779394 -- triple jump
-
-
--- 805315794  -- swimming legs only
--- 805315793  -- slowing down
-
--- 132199  -- damage on back
--- 132189  -- undetermined damage
--- 132197  -- taking damage from goomba
--- 132196  -- taking damage from goomba
--- 132195  -- taking damage from explosion
--- 132194  -- taking damage from thwomp falling on butt
--- 132169  -- fire on butt
--- 201327152  -- fall damage
--- 201327166  -- groundpound fall damage
-
-
--- 805446341  - damage in water
--- 805319364 - drowning
--- 805446371
--- 6442 -- falling from ceiling after dead
--- 6440
--- 6441
