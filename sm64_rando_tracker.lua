@@ -642,11 +642,6 @@ while true do
             reason = "Suspected water damage"
             run_end = true
             shouldSaveAttempt = true
-
-        -- Hazy Gas Death
-        elseif level == 7 and hp < previous_hp and not run_end and run_start then
-            reason = "Hazy Gas Got You"
-            shouldSaveAttempt = true
         
         elseif not LevelHasWater(level) and not run_end and run_start and hp < previous_hp then
             reason = "Took Damage"
