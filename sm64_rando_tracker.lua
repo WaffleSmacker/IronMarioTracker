@@ -644,7 +644,7 @@ while true do
             shouldSaveAttempt = true
 
         -- Hazy Gas Death
-        elseif level == 7 and hp < previous_hp not in_water and not run_end and run_start then
+        elseif level == 7 and hp < previous_hp and not in_water and not run_end and run_start then
             reason = "Hazy Gas Got You"
             shouldSaveAttempt = true
         
