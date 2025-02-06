@@ -23,6 +23,24 @@ local warpLogReset = false  -- New flag to prevent multiple resets
 local shouldSaveAttempt = false
 local reason = ""
 
+local addressMario = 0x194b80 -- gMarioStates
+local addressHud = 0x194b70 -- gHudDisplay
+local addressCurrLevelNum = 0x1861f8 -- gCurrLevelNum
+local addressRandomizerGameSeed = 0x1c27bc -- gRandomizerGameSeed
+local addressMarioGeometry = 0x193ddc -- sMarioGeometry
+local addressDelayedWarpOp = 0x194b5c -- sDelayedWarpOp
+local addressCurrIntendedLevel = 0x19390c -- gCurrentIntendedLevel
+
+local addressMarioInput = addressMario + 0x2
+local addressMarioFlags = addressMario + 0x4
+local addressMarioAction = addressMario + 0xC
+local addressMarioPos = addressMario + 0x3C
+local addressMarioHurtCounter = addressMario + 0xB2
+local addressHudCoins = addressHud + 0x2
+local addressHudStars = addressHud + 0x4
+local addressHudHealthWedges = addressHud + 0x6
+local addressMarioGeometryCurrFloorType = addressMarioGeometry + 0x8
+
 local hp = 8
 local coins
 local stars
@@ -37,6 +55,8 @@ local mario_action
 
 local previous_hp = 8
 local previous_level = 1
+local previous_seed = 0
+local previous_intended_level = 1
 local leave_water_hp
 local elapsedTime = 0
 local frameCounter = 0  -- Initialize the frame counter
@@ -474,6 +494,15 @@ function checkAndLogWarpTransition(mario_pos, warpCoords, previous_level, curren
     end
 end
 
+function logLevel(currentLevel, intendedLevel)
+    local currentLevelAbbr = LocationMap[currentLevel] and LocationMap[currentLevel][2]
+    local intendedLevelAbbr = LocationMap[intendedLevel] and LocationMap[intendedLevel][2]
+    if intendedLevelAbbr ~= nil and currentLevelAbbr ~= nil and not warp_log[intendedLevelAbbr] then
+        warp_log[intendedLevelAbbr] = currentLevelAbbr
+        saveWarpLog()
+    end
+end
+
 
 -- Log warp transitions and save
 function logWarpTransition(warpPoint, currentLevel)
@@ -535,6 +564,18 @@ function isMarioActionInList(action, actionList)
     return false  -- No match found
 end
 
+OR, XOR, AND = 1, 3, 4
+
+function bitoper(a, b, oper)
+   local r, m, s = 0, 2^31
+   repeat
+      s,a,b = a+b+m, a%m, b%m
+      r,m = r + m*oper%(s-a-b), m/2
+   until m < 1
+   return r
+end
+
+
 ---------------------------------
 ---------- Main Action ----------
 ---------------------------------
@@ -543,8 +584,8 @@ while true do
     frameCounter = frameCounter + 1
 
     -- This is very time sensitive and needs to run each frame.
-    damage_time = memory.readbyte(0x0187232)  -- this tracks how long mario should take damage (does not apply underwater)
-    if damage_time > 0 and run_start then
+    damage_time = memory.readbyte(addressMarioHurtCounter)  -- this tracks how long mario should take damage (does not apply underwater)
+    if damage_time > 0 and run_start and elapsedTime > 0 then
         damage_was_taken = true
     end
 
@@ -553,20 +594,30 @@ while true do
 
         previous_hp = hp
         previous_level = level
-        hp    = memory.readbyte(0x01870D7)
-        coins = memory.read_u16_be(0x0187172)  -- might be also 187228
-        stars = memory.read_u16_be(0x018722A)  -- 2 byte - might also be   187174
-        level = memory.readbyte(0x01787C9)  -- 1 byte - might also be 187161
+        previous_seed = seed
+        hp    = memory.read_u16_be(addressHudHealthWedges)
+        coins = memory.read_u16_be(addressHudCoins)
+        stars = memory.read_u16_be(addressHudStars)
+        level = memory.read_u16_be(addressCurrLevelNum)
     --   area  = memory.readbyte(0x033B24A)
     --   act   = memory.readbyte(0x0331620)
-        terrain = memory.read_u16_be(0x01863E4)
-        seed  = memory.read_u32_be(0x01B1E30)  -- 4 byte shows the seed.
-        mario_action  = memory.read_u32_be(0x0186508)  -- 4 byte shows the seed.
-        water = memory.read_u16_be(0x017A900)  -- 67109004 in water, ~ out of water
-        mario_pos = read3float(0x01871BC)  -- Mario position
+        terrain = memory.read_u16_be(addressMarioGeometryCurrFloorType)
+        seed  = memory.read_u32_be(addressRandomizerGameSeed)
+        mario_action  = memory.read_u32_be(addressMarioAction)
+        mario_pos = read3float(addressMarioPos)
         --print(string.format("Mario Position: X = %.2f, Y = %.2f, Z = %.2f", mario_pos[0], mario_pos[1], mario_pos[2]))
 
-        local in_water = water == 1024
+        local delayedWarpOp = memory.read_u16_be(addressDelayedWarpOp)
+
+        local in_water = bitoper(mario_action, 0xC0, AND) == 0xC0
+        local marioInput = memory.read_u16_be(addressMarioInput)
+        local marioFlags = memory.read_u32_be(addressMarioInput)
+
+        local in_gas = bitoper(marioInput, 0x100, AND) == 0x100
+        local intangible = bitoper(mario_action, 0x1000, AND) == 0x1000
+        local metal_cap = bitoper(marioFlags, 4, AND) == 4
+
+        local taking_gas_damage = in_gas and not intangible and not metal_cap
 
         -- Get the level name
         local levelName = LocationMap[level] and LocationMap[level][1] or "Unknown Level"
@@ -574,15 +625,21 @@ while true do
         local levelId = level
         
         -- Detect and log warp transitions
-        local warpPoint = checkTerrainForWarp(terrain)
-        if warpPoint then
-            logWarpTransition(warpPoint, level)
+        local intended_level = memory.read_u32_be(addressCurrIntendedLevel)
+        if (intended_level ~= previous_intended_level) then
+            logLevel(level, intended_level)
         end
+        previous_intended_level = intended_level
 
-        local warpLabel = checkProximityToWarpPoints(mario_pos, warpCoords)
-        if warpLabel then
-            checkAndLogWarpTransition(mario_pos, warpCoords, previous_level, level)
-        end
+        -- local warpPoint = checkTerrainForWarp(terrain)
+        -- if warpPoint then
+        --     logWarpTransition(warpPoint, level)
+        -- end
+
+        -- local warpLabel = checkProximityToWarpPoints(mario_pos, warpCoords)
+        -- if warpLabel then
+        --     checkAndLogWarpTransition(mario_pos, warpCoords, previous_level, level)
+        -- end
 
         -- Start the timer when leaving the menu
         startRunTimer(level)
@@ -602,7 +659,7 @@ while true do
         end
 
         -- Update the star tracker
-        if level and stars then
+        if level > 1 and level ~= 16 and stars then
             local levelAbbr = LocationMap[level] and LocationMap[level][2] or "Unknown"
             if levelAbbr ~= "Unknown" then
                 -- Check if there are unlogged stars
@@ -620,14 +677,14 @@ while true do
 
         
 
-        if isMarioActionInList(mario_action, mario_on_shell) then
-            taint_detected = true
-        else
-            taint_detected = false
-            gui.clearGraphics()
-        end
+        -- if isMarioActionInList(mario_action, mario_on_shell) then
+        --     taint_detected = true
+        -- else
+        --     taint_detected = false
+        --     gui.clearGraphics()
+        -- end
         -- Checks to see if mario has taken damage or not by using the damage meter.
-        if damage_was_taken and not in_water and not run_end and run_start and elapsedTime > 5 then
+        if damage_was_taken and not in_water and not taking_gas_damage and not run_end and run_start and elapsedTime > 5 then
             reason = string.format("Took damage from Enemy or fall")
             run_end = true
             shouldSaveAttempt = true
@@ -653,7 +710,8 @@ while true do
             shouldSaveAttempt = true
 
         -- Mario falls out of course
-        elseif isMarioActionInList(mario_action, mario_fell_out_of_course) and not run_end and run_start then
+        -- elseif isMarioActionInList(mario_action, mario_fell_out_of_course) and not run_end and run_start then
+        elseif ((delayedWarpOp == 18) or (delayedWarpOp == 20)) and not run_end and run_start then
             reason = "Mario Fell out of course"
             run_end = true
             shouldSaveAttempt = true
@@ -664,6 +722,17 @@ while true do
             print(reason)
             saveAttempt(attemptDataCsv, attemptsFile, seed, attemptCount, stars, levelAbbr, formatElapsedTime(elapsedTime), starTracker)
             logged_run = true
+            run_start = false
+        end
+
+        if run_end and seed ~= previous_seed then
+            attemptCount = attemptCount + 1
+            run_end = false
+            damage_was_taken = false
+            logged_run = false
+            taint_detected = false
+            shouldSaveAttempt = false
+            reason = ""
         end
 
         ---------------------------------
