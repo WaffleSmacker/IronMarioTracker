@@ -23,13 +23,13 @@ local warpLogReset = false  -- New flag to prevent multiple resets
 local shouldSaveAttempt = false
 local reason = ""
 
-local addressMario = 0x194b80 -- gMarioStates
-local addressHud = 0x194b70 -- gHudDisplay
-local addressCurrLevelNum = 0x1861f8 -- gCurrLevelNum
-local addressRandomizerGameSeed = 0x1c27bc -- gRandomizerGameSeed
-local addressMarioGeometry = 0x193ddc -- sMarioGeometry
-local addressDelayedWarpOp = 0x194b5c -- sDelayedWarpOp
-local addressCurrIntendedLevel = 0x19390c -- gCurrentIntendedLevel
+local addressMario = 0x19ca70 -- gMarioStates
+local addressHud = 0x19ca60 -- gHudDisplay
+local addressCurrLevelNum = 0x18e0e8 -- gCurrLevelNum
+local addressRandomizerGameSeed = 0x1ca6ac -- gRandomizerGameSeed
+local addressMarioGeometry = 0x19bccc -- sMarioGeometry
+local addressDelayedWarpOp = 0x19ca4c -- sDelayedWarpOp
+local addressCurrIntendedLevel = 0x19b7fc -- gCurrentIntendedLevel
 
 local addressMarioInput = addressMario + 0x2
 local addressMarioFlags = addressMario + 0x4
