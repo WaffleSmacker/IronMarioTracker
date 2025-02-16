@@ -1,12 +1,3 @@
---------------------------------------
---------- User Configuration ---------
---------------------------------------
-local fontSize = 16 -- Set the desired font size.
-
-------------------------------------------
---------- End User Configuration ---------
-------------------------------------------
-
 local json = require("sm64_rando_tracker/Json") -- Adjust the path based on your setup
 
 -- SM64 Lua script for BizHawk emulator
@@ -789,24 +780,28 @@ end
 
 -- Function to render GUI elements
 function renderGui()
+    local gameWidth = client.bufferwidth()
+    local gameHeight = client.bufferheight()
+    local screenWidth = client.screenwidth()
+    local screenHeight = client.screenheight()
+
+    local padWidth = (gameHeight * (16 / 9)) - gameWidth
+
+    local fontSize = gameHeight / 50
+    local charWidth = fontSize / 1.6
+
+    local yOffset = 20
+
+    local musicName = getSongName(displayData.music)
+
     gui.clearGraphics()
 
-    game_width = client.bufferwidth()
-    game_height = client.bufferheight()
-    screen_width = client.screenwidth()
-    screen_height = client.screenheight()
-
-    y_offset = 20
-
-    char_width = fontSize * 0.625
-    pad_width = (char_width * 20) + 20
-
-    client.SetGameExtraPadding(0, 0, pad_width + 20, 0)
+    client.SetGameExtraPadding(0, 0, padWidth, 0)
 
     if displayData.taint_detected then
         for i = 1, 100 do -- Adjust the number to spam more or fewer instances
-            local middle_x = math.floor(game_width / 2) - 200
-            local middle_y = screen_height - math.floor(screen_height / 6)
+            local middle_x = math.floor(gameWidth / 2) - 200
+            local middle_y = screenHeight - math.floor(screenHeight / 6)
             gui.drawText(middle_x, middle_y - 200, "TAINT DETECTED", "red", nil, 40, "Arial", "bold")
         end
     end
@@ -815,56 +810,57 @@ function renderGui()
     --     "Screen Width:" .. screen_width .. "\nScreen Height:" .. screen_height .. "\nGame Width:" .. game_width ..
     --         "\nBuffer Width: " .. client.bufferwidth() .. "\nBuffer Height: " .. client.bufferheight())
 
-    gui.drawString(game_width + (pad_width / 2), y_offset, "IronMario", "lightblue", nil, fontSize, nil, nil, "center")
-    gui.drawString(game_width + (pad_width / 2), y_offset + fontSize, "Tracker", "lightblue", nil, fontSize, nil, nil,
+    gui.drawString(gameWidth + (padWidth / 2), yOffset, "IronMario", "lightblue", nil, fontSize, nil, nil, "center")
+    gui.drawString(gameWidth + (padWidth / 2), yOffset + fontSize, "Tracker", "lightblue", nil, fontSize, nil, nil,
         "center")
 
-    gui.drawString(game_width, y_offset + (fontSize * 3), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 3), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize)
 
-    gui.drawString(game_width, y_offset + (fontSize * 4), "Run Time: " .. formatElapsedTime(displayData.elapsedTime),
-        nil, nil, fontSize)
-    gui.drawString(game_width, y_offset + (fontSize * 5), "Stars: " .. displayData.stars, nil, nil, fontSize)
-    gui.drawString(game_width, y_offset + (fontSize * 6), "Level: " .. displayData.levelAbbr, nil, nil, fontSize)
-    gui.drawString(game_width, y_offset + (fontSize * 7), "Seed: " .. displayData.seed, nil, nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 4), "Run Time: " .. formatElapsedTime(displayData.elapsedTime), nil,
+        nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 5), "Stars: " .. displayData.stars, nil, nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 6), "Level: " .. displayData.levelAbbr, nil, nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 7), "Seed: " .. displayData.seed, nil, nil, fontSize)
 
     if displayData.logged_run and displayData.pbStars < displayData.stars then
-        gui.drawString(game_width, y_offset + (fontSize * 8), "RUN OVER - NEW PB!", "red", nil, fontSize)
+        gui.drawString(gameWidth, yOffset + (fontSize * 8), "RUN OVER - NEW PB!", "red", nil, fontSize)
     elseif displayData.logged_run then
-        gui.drawString(game_width, y_offset + (fontSize * 8), "RUN OVER", "red", nil, fontSize)
+        gui.drawString(gameWidth, yOffset + (fontSize * 8), "RUN OVER", "red", nil, fontSize)
     end
 
-    gui.drawString(game_width, y_offset + (fontSize * 9), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 9), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize)
 
-    gui.drawString(game_width, y_offset + (fontSize * 11), "== Warp Map ==", "orange", nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 11), "== Warp Map ==", "orange", nil, fontSize)
 
     local drawIndex = 12
 
     if next(warp_log) then
         for warpFrom, warpTo in pairs(warp_log) do
-            gui.drawString(game_width + (char_width * 2), y_offset + (fontSize * drawIndex),
-                string.format("%s -> %s", warpFrom, warpTo), nil, nil, fontSize)
+            gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), string.format("  %s -> %s", warpFrom, warpTo),
+                nil, nil, fontSize)
             drawIndex = drawIndex + 1
         end
     end
 
     drawIndex = drawIndex + 1
 
-    gui.drawString(game_width, y_offset + (fontSize * drawIndex), "== Stars Collected ==", "yellow", nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), "== Stars Collected ==", "yellow", nil, fontSize)
 
     drawIndex = drawIndex + 1
 
     if next(starTracker) then
         for levelAbbr, starCount in pairs(starTracker) do
-            gui.drawString(game_width + 30, y_offset + (fontSize * drawIndex),
-                string.format("%s: %d", levelAbbr, starCount), nil, nil, fontSize)
+            gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), string.format("  %s: %d", levelAbbr, starCount),
+                nil, nil, fontSize)
             drawIndex = drawIndex + 1
         end
     end
 
-    if displayData.music and previous_music ~= music_name then
-        saveMusic(music_name)
+    if displayData.music and previous_music ~= musicName then
+        saveMusic(musicName)
     end
-    gui.drawString(20 + math.floor(char_width / 2), game_height - (20 + (math.floor(fontSize * 1.25))), music_name, nil,
+
+    gui.drawString(20 + math.floor(charWidth / 2), gameHeight - (20 + (math.floor(fontSize * 1.25))), musicName, nil,
         nil, fontSize)
 end
 
