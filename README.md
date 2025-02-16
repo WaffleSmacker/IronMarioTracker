@@ -6,6 +6,10 @@
 Check out the [releases page](https://github.com/WaffleSmacker/IronMarioTracker/releases) to get the most recent version of the tracker.
 Download the IronMarioTracker.zip file.
 
+# Setup
+
+The font size used for the tracker is now configurable. Just set `fontSize` at the beginning of the script to whatever you like, and the script will handle sizing automatically.
+
 # About
 This tracker was put together to support streamers and gamers alike who are taking on the IronMario challenge.
 To date it can help you by keeping track of your best PB, warp mapping, and tracking where you got your stars.
