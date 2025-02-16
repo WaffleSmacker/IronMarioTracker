@@ -613,10 +613,10 @@ function renderGui()
     local screenWidth = client.screenwidth()
     local screenHeight = client.screenheight()
 
-    local padWidth = (gameHeight * (16 / 9)) - gameWidth
+    local padWidth = math.floor((gameHeight * (16 / 9)) - gameWidth)
 
-    local fontSize = gameHeight / 50
-    local charWidth = fontSize / 1.6
+    local fontSize = math.floor(gameHeight / 50)
+    local charWidth = math.floor(fontSize / 1.6)
 
     local yOffset = 20
 
@@ -636,9 +636,10 @@ function renderGui()
     --     "Screen Width:" .. screen_width .. "\nScreen Height:" .. screen_height .. "\nGame Width:" .. game_width ..
     --         "\nBuffer Width: " .. client.bufferwidth() .. "\nBuffer Height: " .. client.bufferheight())
 
-    gui.drawString(gameWidth + (padWidth / 2), yOffset, "IronMario", "lightblue", nil, fontSize, nil, nil, "center")
-    gui.drawString(gameWidth + (padWidth / 2), yOffset + fontSize, "Tracker", "lightblue", nil, fontSize, nil, nil,
+    gui.drawString(gameWidth + math.floor(padWidth / 2), yOffset, "IronMario", "lightblue", nil, fontSize, nil, nil,
         "center")
+    gui.drawString(gameWidth + math.floor(padWidth / 2), yOffset + fontSize, "Tracker", "lightblue", nil, fontSize, nil,
+        nil, "center")
 
     gui.drawString(gameWidth, yOffset + (fontSize * 3), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize)
 
