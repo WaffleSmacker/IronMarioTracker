@@ -585,23 +585,29 @@ local function totalLoggedStars()
     return total
 end
 
--- function get_screen_dimensions()
---     local screen_width = client.screenwidth()
---     local screen_height = client.screenheight()
+-- Function to check if mario_action matches any value in a list
+function isMarioActionInList(action, actionList)
+    for _, value in ipairs(actionList) do
+        if action == value then
+            return true -- Found a match
+        end
+    end
+    return false -- No match found
+end
 
---     -- Maintain 4:3 aspect ratio for the game area
---     -- local game_width = math.floor(screen_height * (4 / 3))
---     local padding_right = math.max(math.floor(math.floor(baseFontSize * 0.9) * 16 * windowsScalingFactor),
---         screen_width - game_width)
+OR, XOR, AND = 1, 3, 4
 
---     -- Apply padding to reserve space on the right
---     client.SetGameExtraPadding(0, 0, padding_right, 0)
---     return screen_width, screen_height, game_width
--- end
+function bitoper(a, b, oper)
+    local r, m, s = 0, 2 ^ 31
+    repeat
+        s, a, b = a + b + m, a % m, b % m
+        r, m = r + m * oper % (s - a - b), m / 2
+    until m < 1
+    return r
+end
 
 -- Function to render GUI elements
 function renderGui()
-
     gui.clearGraphics()
 
     game_width = client.bufferwidth()
@@ -673,27 +679,6 @@ function renderGui()
             drawIndex = drawIndex + 1
         end
     end
-end
-
--- Function to check if mario_action matches any value in a list
-function isMarioActionInList(action, actionList)
-    for _, value in ipairs(actionList) do
-        if action == value then
-            return true -- Found a match
-        end
-    end
-    return false -- No match found
-end
-
-OR, XOR, AND = 1, 3, 4
-
-function bitoper(a, b, oper)
-    local r, m, s = 0, 2 ^ 31
-    repeat
-        s, a, b = a + b + m, a % m, b % m
-        r, m = r + m * oper % (s - a - b), m / 2
-    until m < 1
-    return r
 end
 
 ---------------------------------
@@ -881,88 +866,5 @@ while true do
 
     renderGui()
 
-    -- scaledFontSize = baseFontSize * windowsScalingFactor
-
-    -- local right_panel_y_start = math.floor(20 * windowsScalingFactor)
-    -- local right_panel_vspace = math.floor(scaledFontSize * 1.2)
-
-    -- if displayData.taint_detected then
-    --     for i = 1, 100 do -- Adjust the number to spam more or fewer instances
-    --         local middle_x = math.floor(game_width / 2) - 200
-    --         local middle_y = screen_height - math.floor(screen_height / 6)
-    --         gui.drawText(middle_x, middle_y - 200, "TAINT DETECTED", "red", nil, 40, "Arial", "bold")
-    --     end
-    -- end
-
-    -- gui.drawString(game_width, right_panel_y_start + 0 * right_panel_vspace, "== Info Panel ==", "lightblue", nil,
-    --     scaledFontSize)
-    -- gui.drawString(game_width, right_panel_y_start + 1 * right_panel_vspace, "Attempt#: " .. displayData.attemptCount,
-    --     nil, nil, scaledFontSize)
-    -- -- Display the elapsed time on the info panel
-    -- gui.drawString(game_width, right_panel_y_start + 2 * right_panel_vspace,
-    --     "Run Time: " .. formatElapsedTime(displayData.elapsedTime), nil, nil, scaledFontSize)
-    -- gui.drawString(game_width, right_panel_y_start + 3 * right_panel_vspace, "Stars: " .. displayData.stars, nil, nil,
-    --     scaledFontSize)
-    -- gui.drawString(game_width, right_panel_y_start + 4 * right_panel_vspace, "Level: " .. displayData.levelAbbr, nil,
-    --     nil, scaledFontSize)
-    -- gui.drawString(game_width, right_panel_y_start + 5 * right_panel_vspace, "Seed: " .. displayData.seed, nil, nil,
-    --     scaledFontSize)
-
-    -- if displayData.logged_run and displayData.pbStars == displayData.stars then
-    --     gui.drawString(game_width, right_panel_y_start + 6 * right_panel_vspace, "RUN OVER - NEW PB!", "red", nil,
-    --         scaledFontSize)
-    -- elseif displayData.logged_run then
-    --     gui.drawString(game_width, right_panel_y_start + 6 * right_panel_vspace, "RUN OVER", "red", nil, scaledFontSize)
-    -- end
-
-    -- gui.drawString(game_width, right_panel_y_start + 7 * right_panel_vspace, "PB Stars: " .. displayData.pbStars,
-    --     "yellow", nil, scaledFontSize)
-
-    -- local warpCountLines = 0
-
-    -- -- Display the "WarpMapping" header first, even if there is no data
-    -- local warpMappingStartLine = 9 -- Start warp mapping at line 9
-    -- gui.drawString(game_width, right_panel_y_start + warpMappingStartLine * right_panel_vspace, "== Warp Mapping ==",
-    --     "orange", nil, scaledFontSize)
-
-    -- -- Display warp mapping data if available
-    -- if next(warp_log) then -- Ensure warp_log has entries to iterate
-    --     local warpMappingLine = warpMappingStartLine + 1 -- Start 2 lines after the WarpMapping header
-
-    --     for warpFrom, warpTo in pairs(warp_log) do
-    --         gui.drawString(game_width + 30, right_panel_y_start + warpMappingLine * right_panel_vspace,
-    --             string.format("%s -> %s", warpFrom, warpTo), nil, nil, scaledFontSize)
-    --         warpMappingLine = warpMappingLine + 1
-    --         warpCountLines = warpCountLines + 1 -- Increment for each warp line
-    --     end
-    -- end
-
-    -- -- Calculate the starting position for star tracking dynamically
-    -- local starTrackingStartLine = 11 + warpCountLines -- Ensure star tracking starts after warp mapping
-
-    -- -- Display the "Stars Collected" header
-    -- gui.drawString(game_width, right_panel_y_start + starTrackingStartLine * right_panel_vspace,
-    --     "== Stars Collected ==", "yellow", nil, scaledFontSize)
-
-    -- -- Display star tracking data
-    -- if next(starTracker) then -- Check if the starTracker table has any entries
-    --     local starLine = starTrackingStartLine + 1 -- Start star tracking below the header
-
-    --     for levelAbbr, starCount in pairs(starTracker) do
-    --         -- Only display levels with at least one star collected
-    --         gui.drawString(game_width + 30, right_panel_y_start + starLine * right_panel_vspace,
-    --             string.format("%s: %d", levelAbbr, starCount), nil, nil, scaledFontSize)
-    --         starLine = starLine + 1
-    --     end
-    -- end
-
-    -- -- Uncomment and display additional data if needed
-    -- -- gui.text(20, 500, "Mario Action: " .. displayData.marioAction)
-    -- -- gui.text(20, 530, "Level: " .. displayData.levelId)
-    -- -- gui.text(20, 560, "In Water? " .. tostring(displayData.marioInWater))
-    -- -- print3float(20, 590, "Coords: ", displayData.marioPos)
-    -- -- gui.text(520, 0, "Act: " .. act)
-
     emu.frameadvance()
-
 end
