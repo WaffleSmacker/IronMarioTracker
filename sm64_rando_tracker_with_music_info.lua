@@ -7,10 +7,29 @@ local json = require("sm64_rando_tracker/Json") -- Adjust the path based on your
 --------- Variables ---------
 -----------------------------
 
+local fontFace = "Lucida Console"
+local validRomVersion = "v1.0.2"
+
 -- Reset the console when resetting
 console.clear()
 
-local fontFace = "Lucida Console"
+-------------------------
+----- Version Check -----
+-------------------------
+local validVersion = false
+
+memory.usememorydomain("ROM")
+local romVersionBytes = memory.read_bytes_as_array(0x2A, 6)
+
+local romVersion = ""
+
+for i = 1, 6 do
+    romVersion = romVersion .. string.char(romVersionBytes[i])
+end
+
+if romVersion == validRomVersion then
+    validVersion = true
+end
 
 -- Attempts data
 local attemptsFile = "sm64_rando_tracker/attempts.txt"
@@ -795,13 +814,15 @@ function renderGui()
     local fontSize = math.floor(gameHeight / 50)
     local charWidth = math.floor(fontSize / 1.6)
 
-    local yOffset = 20
+    local iconSize = math.floor(gameHeight / 12)
 
     local musicName = getSongName(displayData.music)
 
     gui.clearGraphics()
 
     client.SetGameExtraPadding(0, 0, padWidth, 0)
+
+    gui.drawImage("sm64_rando_tracker/logo.png", (gameWidth + padWidth) - iconSize, 0, iconSize, iconSize)
 
     if displayData.taint_detected then
         for i = 1, 100 do -- Adjust the number to spam more or fewer instances
@@ -811,38 +832,49 @@ function renderGui()
         end
     end
 
-    -- gui.drawString(20, y_offset,
-    --     "Screen Width:" .. screen_width .. "\nScreen Height:" .. screen_height .. "\nGame Width:" .. game_width ..
-    --         "\nBuffer Width: " .. client.bufferwidth() .. "\nBuffer Height: " .. client.bufferheight())
-
-    gui.drawString(gameWidth + math.floor(padWidth / 2), yOffset, "IronMario Tracker", "lightblue", nil, fontSize,
+    gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize, "IronMario Tracker", "lightblue", nil, fontSize,
         fontFace, nil, "center")
+    gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 2, "v1.0.2u1", "gray", nil, fontSize, fontFace, nil,
+        "center")
 
-    gui.drawString(gameWidth, yOffset + (fontSize * 2), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize,
-        fontFace)
-
-    gui.drawString(gameWidth, yOffset + (fontSize * 3), "Run Time: " .. formatElapsedTime(displayData.elapsedTime), nil,
-        nil, fontSize, fontFace)
-    gui.drawString(gameWidth, yOffset + (fontSize * 4), "Stars: " .. displayData.stars, nil, nil, fontSize, fontFace)
-    gui.drawString(gameWidth, yOffset + (fontSize * 5), "Level: " .. displayData.levelAbbr, nil, nil, fontSize, fontFace)
-    gui.drawString(gameWidth, yOffset + (fontSize * 6), "Seed: " .. displayData.seed, nil, nil, fontSize, fontFace)
-
-    if displayData.logged_run and displayData.pbStars == displayData.stars then
-        gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER - NEW PB!", "red", nil, fontSize, fontFace)
-    elseif displayData.logged_run then
-        gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER", "red", nil, fontSize, fontFace)
+    if not validVersion then
+        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 10, "Running incompatible", "red", nil,
+            fontSize, fontFace, nil, "center")
+        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 11, "ROM version!", "red", nil, fontSize,
+            fontFace, nil, "center")
+        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 13, "Expected: " .. validRomVersion, "red", nil,
+            fontSize, fontFace, nil, "center")
+        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 14, "Running: " .. romVersion, "red", nil,
+            fontSize, fontFace, nil, "center")
+        return
     end
 
-    gui.drawString(gameWidth, yOffset + (fontSize * 8), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize,
+    gui.drawString(gameWidth, fontSize + (fontSize * 3), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize,
         fontFace)
 
-    gui.drawString(gameWidth, yOffset + (fontSize * 10), "== Warp Map ==", "orange", nil, fontSize, fontFace)
+    gui.drawString(gameWidth, fontSize + (fontSize * 4), "Run Time: " .. formatElapsedTime(displayData.elapsedTime),
+        nil, nil, fontSize, fontFace)
+    gui.drawString(gameWidth, fontSize + (fontSize * 5), "Stars: " .. displayData.stars, nil, nil, fontSize, fontFace)
+    gui.drawString(gameWidth, fontSize + (fontSize * 6), "Level: " .. displayData.levelAbbr, nil, nil, fontSize,
+        fontFace)
+    gui.drawString(gameWidth, fontSize + (fontSize * 7), "Seed: " .. displayData.seed, nil, nil, fontSize, fontFace)
 
-    local drawIndex = 11
+    if displayData.logged_run and displayData.pbStars == displayData.stars then
+        gui.drawString(gameWidth, fontSize + (fontSize * 8), "RUN OVER - NEW PB!", "red", nil, fontSize, fontFace)
+    elseif displayData.logged_run then
+        gui.drawString(gameWidth, fontSize + (fontSize * 8), "RUN OVER", "red", nil, fontSize, fontFace)
+    end
+
+    gui.drawString(gameWidth, fontSize + (fontSize * 9), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize,
+        fontFace)
+
+    gui.drawString(gameWidth, fontSize + (fontSize * 11), "== Warp Map ==", "orange", nil, fontSize, fontFace)
+
+    local drawIndex = 12
 
     if next(warp_log) then
         for warpFrom, warpTo in pairs(warp_log) do
-            gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), string.format("  %s → %s", warpFrom, warpTo),
+            gui.drawString(gameWidth, fontSize + (fontSize * drawIndex), string.format("  %s → %s", warpFrom, warpTo),
                 nil, nil, fontSize, fontFace)
             drawIndex = drawIndex + 1
         end
@@ -850,15 +882,15 @@ function renderGui()
 
     drawIndex = drawIndex + 1
 
-    gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), "== Stars Collected ==", "yellow", nil, fontSize,
+    gui.drawString(gameWidth, fontSize + (fontSize * drawIndex), "== Stars Collected ==", "yellow", nil, fontSize,
         fontFace)
 
     drawIndex = drawIndex + 1
 
     if next(starTracker) then
         for levelAbbr, starCount in pairs(starTracker) do
-            gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), string.format("  %s: %d", levelAbbr, starCount),
-                nil, nil, fontSize, fontFace)
+            gui.drawString(gameWidth, fontSize + (fontSize * drawIndex),
+                string.format("  %s: %d", levelAbbr, starCount), nil, nil, fontSize, fontFace)
             drawIndex = drawIndex + 1
         end
     end
@@ -867,10 +899,6 @@ function renderGui()
         gui.drawString(20 + math.floor(charWidth / 2), gameHeight - (20 + (math.floor(fontSize * 1.25))), musicName,
             nil, nil, fontSize, fontFace)
     end
-
-    local iconSize = math.floor(gameHeight / 12)
-
-    gui.drawImage("sm64_rando_tracker/logo.png", (gameWidth + padWidth) - iconSize, 0, iconSize, iconSize)
 end
 
 ---------------------------------

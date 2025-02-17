@@ -11,10 +11,13 @@ To date it can help you by keeping track of your best PB, warp mapping, and trac
 
 # Changelog
 
-## v1.0.3 - 2025-02-17
+## v1.0.2.1 - 2025-02-17
+
+### IronMario Version: v1.0.2
 
 ### Bugfixes
 - Rewrote the GUI render loop. It's a lot more consistent about the space it uses, window resizing, etc. It also works properly with Windows display scaling, maximized, fullscreen, etc.
+- Added ROM version check.
 
 ### Performance
 - The GUI now only renders once per second instead of every frame. This should drastically reduce framerate drops.

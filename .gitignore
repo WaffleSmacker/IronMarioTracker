@@ -1,3 +1,4 @@
-sm64_rando_tracker/*
-!sm64_rando_tracker/Json.lua
-!sm64_rando_tracker/logo.png
+/inspect.lua
+/sm64_rando_tracker/*
+!/sm64_rando_tracker/Json.lua
+!/sm64_rando_tracker/logo.png
