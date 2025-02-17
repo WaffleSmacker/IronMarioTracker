@@ -101,9 +101,6 @@ function LevelHasWater(level)
     return true -- Level not found
 end
 
-local minFramerate = 60
-local maxFramerate = 0
-
 -- see console for other memory domains
 memory.usememorydomain("RDRAM")
 
@@ -860,9 +857,6 @@ function renderGui()
 
     gui.drawString(20 + math.floor(charWidth / 2), gameHeight - (20 + (math.floor(fontSize * 1.25))), musicName, nil,
         nil, fontSize)
-
-    gui.drawString(gameWidth, gameHeight - (fontSize + 20), "FPS (Min/Max): " .. minFramerate .. "/" .. maxFramerate,
-        nil, nil, fontSize)
 end
 
 ---------------------------------
@@ -1045,16 +1039,6 @@ while true do
         if displayData.music and previous_music ~= musicName then
             saveMusic(musicName)
         end
-    end
-
-    local framerate = client.get_approx_framerate()
-
-    if framerate < minFramerate then
-        minFramerate = framerate
-    end
-
-    if framerate > maxFramerate then
-        maxFramerate = framerate
     end
 
     --------------------------------

@@ -106,9 +106,6 @@ function LevelHasWater(level)
     return true -- Level not found
 end
 
-local minFramerate = 60
-local maxFramerate = 0
-
 -- see console for other memory domains
 memory.usememorydomain("RDRAM")
 
@@ -683,9 +680,6 @@ function renderGui()
             drawIndex = drawIndex + 1
         end
     end
-
-    gui.drawString(gameWidth, gameHeight - (fontSize + 20), "FPS (Min/Max): " .. minFramerate .. "/" .. maxFramerate,
-        nil, nil, fontSize)
 end
 
 ---------------------------------
@@ -865,16 +859,6 @@ while true do
         displayData.taint_detected = taint_detected
         displayData.marioInWater = in_water
         displayData.marioPos = mario_pos
-    end
-
-    local framerate = client.get_approx_framerate()
-
-    if framerate < minFramerate then
-        minFramerate = framerate
-    end
-
-    if framerate > maxFramerate then
-        maxFramerate = framerate
     end
 
     --------------------------------
