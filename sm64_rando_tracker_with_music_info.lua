@@ -10,6 +10,8 @@ local json = require("sm64_rando_tracker/Json") -- Adjust the path based on your
 -- Reset the console when resetting
 console.clear()
 
+local fontFace = "Lucida Console"
+
 -- Attempts data
 local attemptsFile = "sm64_rando_tracker/attempts.txt"
 local attemptDataCsv = "sm64_rando_tracker/attempts_data.csv"
@@ -54,6 +56,7 @@ local damage_was_taken = false
 local taint_detected = false
 local mario_action
 local music_name = "Super Mario 64 - Title Screen"
+local previous_music
 
 local previous_hp = 8
 local previous_level = 1
@@ -90,6 +93,9 @@ local mario_fell_out_of_course = {6440, 6441, 6442}
 local mario_on_shell = {545326150, 42010778} -- DGR likes the taint
 
 local levels_with_no_water = {9, 24, 4, 22, 8, 14, 15, 27, 31, 29, 18, 17, 30, 19}
+
+local showMusic = false
+local musicTogglePressed = false
 
 -- Function to check if a level is in the list
 function LevelHasWater(level)
@@ -304,11 +310,10 @@ function getSongName(number)
 
     local entry = songs[number]
     if entry then
-        return entry[1] .. "-" .. entry[2]
+        return entry[1] .. " - " .. entry[2]
     else
         return ''
     end
-
 end
 
 WarpLocations = {
@@ -810,53 +815,62 @@ function renderGui()
     --     "Screen Width:" .. screen_width .. "\nScreen Height:" .. screen_height .. "\nGame Width:" .. game_width ..
     --         "\nBuffer Width: " .. client.bufferwidth() .. "\nBuffer Height: " .. client.bufferheight())
 
-    gui.drawString(gameWidth + math.floor(padWidth / 2), yOffset, "IronMario Tracker", "lightblue", nil, fontSize, nil,
-        nil, "center")
+    gui.drawString(gameWidth + math.floor(padWidth / 2), yOffset, "IronMario Tracker", "lightblue", nil, fontSize,
+        fontFace, nil, "center")
 
-    gui.drawString(gameWidth, yOffset + (fontSize * 2), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 2), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize,
+        fontFace)
 
     gui.drawString(gameWidth, yOffset + (fontSize * 3), "Run Time: " .. formatElapsedTime(displayData.elapsedTime), nil,
-        nil, fontSize)
-    gui.drawString(gameWidth, yOffset + (fontSize * 4), "Stars: " .. displayData.stars, nil, nil, fontSize)
-    gui.drawString(gameWidth, yOffset + (fontSize * 5), "Level: " .. displayData.levelAbbr, nil, nil, fontSize)
-    gui.drawString(gameWidth, yOffset + (fontSize * 6), "Seed: " .. displayData.seed, nil, nil, fontSize)
+        nil, fontSize, fontFace)
+    gui.drawString(gameWidth, yOffset + (fontSize * 4), "Stars: " .. displayData.stars, nil, nil, fontSize, fontFace)
+    gui.drawString(gameWidth, yOffset + (fontSize * 5), "Level: " .. displayData.levelAbbr, nil, nil, fontSize, fontFace)
+    gui.drawString(gameWidth, yOffset + (fontSize * 6), "Seed: " .. displayData.seed, nil, nil, fontSize, fontFace)
 
     if displayData.logged_run and displayData.pbStars == displayData.stars then
-        gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER - NEW PB!", "red", nil, fontSize)
+        gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER - NEW PB!", "red", nil, fontSize, fontFace)
     elseif displayData.logged_run then
-        gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER", "red", nil, fontSize)
+        gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER", "red", nil, fontSize, fontFace)
     end
 
-    gui.drawString(gameWidth, yOffset + (fontSize * 8), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 8), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize,
+        fontFace)
 
-    gui.drawString(gameWidth, yOffset + (fontSize * 10), "== Warp Map ==", "orange", nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 10), "== Warp Map ==", "orange", nil, fontSize, fontFace)
 
     local drawIndex = 11
 
     if next(warp_log) then
         for warpFrom, warpTo in pairs(warp_log) do
-            gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), string.format("  %s -> %s", warpFrom, warpTo),
-                nil, nil, fontSize)
+            gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), string.format("  %s → %s", warpFrom, warpTo),
+                nil, nil, fontSize, fontFace)
             drawIndex = drawIndex + 1
         end
     end
 
     drawIndex = drawIndex + 1
 
-    gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), "== Stars Collected ==", "yellow", nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), "== Stars Collected ==", "yellow", nil, fontSize,
+        fontFace)
 
     drawIndex = drawIndex + 1
 
     if next(starTracker) then
         for levelAbbr, starCount in pairs(starTracker) do
             gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), string.format("  %s: %d", levelAbbr, starCount),
-                nil, nil, fontSize)
+                nil, nil, fontSize, fontFace)
             drawIndex = drawIndex + 1
         end
     end
 
-    gui.drawString(20 + math.floor(charWidth / 2), gameHeight - (20 + (math.floor(fontSize * 1.25))), musicName, nil,
-        nil, fontSize)
+    if showMusic then
+        gui.drawString(20 + math.floor(charWidth / 2), gameHeight - (20 + (math.floor(fontSize * 1.25))), musicName,
+            nil, nil, fontSize, fontFace)
+    end
+
+    local iconSize = math.floor(gameHeight / 12)
+
+    gui.drawImage("sm64_rando_tracker/logo.png", (gameWidth + padWidth) - iconSize, 0, iconSize, iconSize)
 end
 
 ---------------------------------
@@ -904,6 +918,8 @@ while true do
         local levelName = LocationMap[level] and LocationMap[level][1] or "Unknown Level"
         local levelAbbr = LocationMap[level] and LocationMap[level][2] or "Unknown"
         local levelId = level
+
+        local musicName = getSongName(displayData.music)
 
         -- Detect and log warp transitions
         local intended_level = memory.read_u32_be(addressCurrIntendedLevel)
@@ -1038,12 +1054,24 @@ while true do
 
         if displayData.music and previous_music ~= musicName then
             saveMusic(musicName)
+            previous_music = musicName
         end
     end
 
     --------------------------------
     ----- Display Tracker Info -----
     --------------------------------
+
+    local currentInputs = joypad.get()
+
+    if currentInputs["P1 L"] and currentInputs["P1 R"] and currentInputs["P1 A"] and currentInputs["P1 B"] and
+        not musicTogglePressed then
+        musicTogglePressed = true
+        showMusic = not showMusic
+    elseif (not currentInputs["P1 L"] or not currentInputs["P1 R"] or not currentInputs["P1 A"] or
+        not currentInputs["P1 B"]) and musicTogglePressed then
+        musicTogglePressed = false
+    end
 
     if (emu.framecount() % 60 == 0) then
         renderGui()

@@ -1,12 +1,3 @@
---------------------------------------
---------- User Configuration ---------
---------------------------------------
-local fontSize = 16 -- Set the desired font size.
-
-------------------------------------------
---------- End User Configuration ---------
-------------------------------------------
-
 local json = require("sm64_rando_tracker/Json") -- Adjust the path based on your setup
 
 -- SM64 Lua script for BizHawk emulator
@@ -18,6 +9,8 @@ local json = require("sm64_rando_tracker/Json") -- Adjust the path based on your
 
 -- Reset the console when resetting
 console.clear()
+
+local fontFace = "Lucida Console"
 
 -- Attempts data
 local attemptsFile = "sm64_rando_tracker/attempts.txt"
@@ -636,50 +629,57 @@ function renderGui()
     --     "Screen Width:" .. screen_width .. "\nScreen Height:" .. screen_height .. "\nGame Width:" .. game_width ..
     --         "\nBuffer Width: " .. client.bufferwidth() .. "\nBuffer Height: " .. client.bufferheight())
 
-    gui.drawString(gameWidth + math.floor(padWidth / 2), yOffset, "IronMario Tracker", "lightblue", nil, fontSize, nil,
-        nil, "center")
+    gui.drawString(gameWidth + math.floor(padWidth / 2), yOffset, "IronMario Tracker", "lightblue", nil, fontSize,
+        fontFace, nil, "center")
 
-    gui.drawString(gameWidth, yOffset + (fontSize * 2), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 2), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize,
+        fontFace)
 
     gui.drawString(gameWidth, yOffset + (fontSize * 3), "Run Time: " .. formatElapsedTime(displayData.elapsedTime), nil,
-        nil, fontSize)
-    gui.drawString(gameWidth, yOffset + (fontSize * 4), "Stars: " .. displayData.stars, nil, nil, fontSize)
-    gui.drawString(gameWidth, yOffset + (fontSize * 5), "Level: " .. displayData.levelAbbr, nil, nil, fontSize)
-    gui.drawString(gameWidth, yOffset + (fontSize * 6), "Seed: " .. displayData.seed, nil, nil, fontSize)
+        nil, fontSize, fontFace)
+    gui.drawString(gameWidth, yOffset + (fontSize * 4), "Stars: " .. displayData.stars, nil, nil, fontSize, fontFace)
+    gui.drawString(gameWidth, yOffset + (fontSize * 5), "Level: " .. displayData.levelAbbr, nil, nil, fontSize, fontFace)
+    gui.drawString(gameWidth, yOffset + (fontSize * 6), "Seed: " .. displayData.seed, nil, nil, fontSize, fontFace)
 
     if displayData.logged_run and displayData.pbStars == displayData.stars then
-        gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER - NEW PB!", "red", nil, fontSize)
+        gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER - NEW PB!", "red", nil, fontSize, fontFace)
     elseif displayData.logged_run then
-        gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER", "red", nil, fontSize)
+        gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER", "red", nil, fontSize, fontFace)
     end
 
-    gui.drawString(gameWidth, yOffset + (fontSize * 8), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 8), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize,
+        fontFace)
 
-    gui.drawString(gameWidth, yOffset + (fontSize * 10), "== Warp Map ==", "orange", nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 10), "== Warp Map ==", "orange", nil, fontSize, fontFace)
 
     local drawIndex = 11
 
     if next(warp_log) then
         for warpFrom, warpTo in pairs(warp_log) do
-            gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), string.format("  %s -> %s", warpFrom, warpTo),
-                nil, nil, fontSize)
+            gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), string.format("  %s → %s", warpFrom, warpTo),
+                nil, nil, fontSize, fontFace)
             drawIndex = drawIndex + 1
         end
     end
 
     drawIndex = drawIndex + 1
 
-    gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), "== Stars Collected ==", "yellow", nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), "== Stars Collected ==", "yellow", nil, fontSize,
+        fontFace)
 
     drawIndex = drawIndex + 1
 
     if next(starTracker) then
         for levelAbbr, starCount in pairs(starTracker) do
             gui.drawString(gameWidth, yOffset + (fontSize * drawIndex), string.format("  %s: %d", levelAbbr, starCount),
-                nil, nil, fontSize)
+                nil, nil, fontSize, fontFace)
             drawIndex = drawIndex + 1
         end
     end
+
+    local iconSize = math.floor(gameHeight / 12)
+
+    gui.drawImage("sm64_rando_tracker/logo.png", (gameWidth + padWidth) - iconSize, 0, iconSize, iconSize)
 end
 
 ---------------------------------
@@ -705,13 +705,10 @@ while true do
         coins = memory.read_u16_be(addressHudCoins)
         stars = memory.read_u16_be(addressHudStars)
         level = memory.read_u16_be(addressCurrLevelNum)
-        --   area  = memory.readbyte(0x033B24A)
-        --   act   = memory.readbyte(0x0331620)
         terrain = memory.read_u16_be(addressMarioGeometryCurrFloorType)
         seed = memory.read_u32_be(addressRandomizerGameSeed)
         mario_action = memory.read_u32_be(addressMarioAction)
         mario_pos = read3float(addressMarioPos)
-        -- print(string.format("Mario Position: X = %.2f, Y = %.2f, Z = %.2f", mario_pos[0], mario_pos[1], mario_pos[2]))
 
         local delayedWarpOp = memory.read_u16_be(addressDelayedWarpOp)
 
