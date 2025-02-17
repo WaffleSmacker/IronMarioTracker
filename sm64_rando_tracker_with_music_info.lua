@@ -857,10 +857,6 @@ function renderGui()
         end
     end
 
-    if displayData.music and previous_music ~= musicName then
-        saveMusic(musicName)
-    end
-
     gui.drawString(20 + math.floor(charWidth / 2), gameHeight - (20 + (math.floor(fontSize * 1.25))), musicName, nil,
         nil, fontSize)
 end
@@ -1042,12 +1038,17 @@ while true do
         displayData.marioPos = mario_pos
         displayData.music = music
 
+        if displayData.music and previous_music ~= musicName then
+            saveMusic(musicName)
+        end
     end
     --------------------------------
     ----- Display Tracker Info -----
     --------------------------------
 
-    renderGui()
+    if (emu.framecount() % 60 == 0) then
+        renderGui()
+    end
 
     emu.frameadvance()
 end

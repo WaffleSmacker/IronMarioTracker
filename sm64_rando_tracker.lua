@@ -861,13 +861,14 @@ while true do
         displayData.taint_detected = taint_detected
         displayData.marioInWater = in_water
         displayData.marioPos = mario_pos
-
     end
     --------------------------------
     ----- Display Tracker Info -----
     --------------------------------
 
-    renderGui()
+    if (emu.framecount() % 60 == 0) then
+        renderGui()
+    end
 
     emu.frameadvance()
 end
