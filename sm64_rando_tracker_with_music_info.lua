@@ -821,7 +821,7 @@ function renderGui()
     gui.drawString(gameWidth, yOffset + (fontSize * 5), "Level: " .. displayData.levelAbbr, nil, nil, fontSize)
     gui.drawString(gameWidth, yOffset + (fontSize * 6), "Seed: " .. displayData.seed, nil, nil, fontSize)
 
-    if displayData.logged_run and displayData.pbStars < displayData.stars then
+    if displayData.logged_run and displayData.pbStars == displayData.stars then
         gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER - NEW PB!", "red", nil, fontSize)
     elseif displayData.logged_run then
         gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER", "red", nil, fontSize)
