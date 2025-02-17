@@ -106,6 +106,9 @@ function LevelHasWater(level)
     return true -- Level not found
 end
 
+local minFramerate = 60
+local maxFramerate = 0
+
 -- see console for other memory domains
 memory.usememorydomain("RDRAM")
 
@@ -636,30 +639,28 @@ function renderGui()
     --     "Screen Width:" .. screen_width .. "\nScreen Height:" .. screen_height .. "\nGame Width:" .. game_width ..
     --         "\nBuffer Width: " .. client.bufferwidth() .. "\nBuffer Height: " .. client.bufferheight())
 
-    gui.drawString(gameWidth + math.floor(padWidth / 2), yOffset, "IronMario", "lightblue", nil, fontSize, nil, nil,
-        "center")
-    gui.drawString(gameWidth + math.floor(padWidth / 2), yOffset + fontSize, "Tracker", "lightblue", nil, fontSize, nil,
+    gui.drawString(gameWidth + math.floor(padWidth / 2), yOffset, "IronMario Tracker", "lightblue", nil, fontSize, nil,
         nil, "center")
 
-    gui.drawString(gameWidth, yOffset + (fontSize * 3), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 2), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize)
 
-    gui.drawString(gameWidth, yOffset + (fontSize * 4), "Run Time: " .. formatElapsedTime(displayData.elapsedTime), nil,
+    gui.drawString(gameWidth, yOffset + (fontSize * 3), "Run Time: " .. formatElapsedTime(displayData.elapsedTime), nil,
         nil, fontSize)
-    gui.drawString(gameWidth, yOffset + (fontSize * 5), "Stars: " .. displayData.stars, nil, nil, fontSize)
-    gui.drawString(gameWidth, yOffset + (fontSize * 6), "Level: " .. displayData.levelAbbr, nil, nil, fontSize)
-    gui.drawString(gameWidth, yOffset + (fontSize * 7), "Seed: " .. displayData.seed, nil, nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 4), "Stars: " .. displayData.stars, nil, nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 5), "Level: " .. displayData.levelAbbr, nil, nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 6), "Seed: " .. displayData.seed, nil, nil, fontSize)
 
     if displayData.logged_run and displayData.pbStars < displayData.stars then
-        gui.drawString(gameWidth, yOffset + (fontSize * 8), "RUN OVER - NEW PB!", "red", nil, fontSize)
+        gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER - NEW PB!", "red", nil, fontSize)
     elseif displayData.logged_run then
-        gui.drawString(gameWidth, yOffset + (fontSize * 8), "RUN OVER", "red", nil, fontSize)
+        gui.drawString(gameWidth, yOffset + (fontSize * 7), "RUN OVER", "red", nil, fontSize)
     end
 
-    gui.drawString(gameWidth, yOffset + (fontSize * 9), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 8), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize)
 
-    gui.drawString(gameWidth, yOffset + (fontSize * 11), "== Warp Map ==", "orange", nil, fontSize)
+    gui.drawString(gameWidth, yOffset + (fontSize * 10), "== Warp Map ==", "orange", nil, fontSize)
 
-    local drawIndex = 12
+    local drawIndex = 11
 
     if next(warp_log) then
         for warpFrom, warpTo in pairs(warp_log) do
@@ -682,6 +683,9 @@ function renderGui()
             drawIndex = drawIndex + 1
         end
     end
+
+    gui.drawString(gameWidth, gameHeight - (fontSize + 20), "FPS (Min/Max): " .. minFramerate .. "/" .. maxFramerate,
+        nil, nil, fontSize)
 end
 
 ---------------------------------
@@ -862,6 +866,17 @@ while true do
         displayData.marioInWater = in_water
         displayData.marioPos = mario_pos
     end
+
+    local framerate = client.get_approx_framerate()
+
+    if framerate < minFramerate then
+        minFramerate = framerate
+    end
+
+    if framerate > maxFramerate then
+        maxFramerate = framerate
+    end
+
     --------------------------------
     ----- Display Tracker Info -----
     --------------------------------
