@@ -9,6 +9,7 @@ local json = require("ironmario_tracker/Json") -- Adjust the path based on your 
 
 local fontFace = "Lucida Console"
 local validRomVersion = "v1.0.2"
+local trackerVersion = "1.0.2u2"
 
 -- Reset the console when resetting
 console.clear()
@@ -120,7 +121,6 @@ local run_end = false
 local run_start = false
 local logged_run = false
 local damage_was_taken = false
-local taint_detected = false
 local mario_action
 local music_name = "Super Mario 64 - Title Screen"
 local previous_music
@@ -143,7 +143,6 @@ local displayData = {
     marioAction = 0,
     pbStars = 0,
     logged_run = false,
-    taint_detected = false,
     marioInWater = false,
     marioPos,
     music = 14,
@@ -157,7 +156,6 @@ starCountLines = 1
 
 local mario_water_damage = {805446341, 805319364, 805446371, 805446344}
 local mario_fell_out_of_course = {6440, 6441, 6442}
-local mario_on_shell = {545326150, 42010778} -- DGR likes the taint
 
 local levels_with_no_water = {9, 24, 4, 22, 8, 14, 15, 27, 31, 29, 18, 17, 30, 19}
 
@@ -858,7 +856,7 @@ function renderGui()
 
     local padWidth = math.floor((gameHeight * (16 / 9)) - gameWidth)
 
-    local fontSize = math.floor(gameHeight / 50)
+    local fontSize = math.max(math.floor(gameHeight / 50), 8)
     local charWidth = math.floor(fontSize / 1.6)
 
     local iconSize = math.floor(gameHeight / 12)
@@ -871,18 +869,10 @@ function renderGui()
 
     gui.drawImage("ironmario_tracker/logo.png", (gameWidth + padWidth) - iconSize, 0, iconSize, iconSize)
 
-    if displayData.taint_detected then
-        for i = 1, 100 do -- Adjust the number to spam more or fewer instances
-            local middle_x = math.floor(gameWidth / 2) - 200
-            local middle_y = screenHeight - math.floor(screenHeight / 6)
-            gui.drawText(middle_x, middle_y - 200, "TAINT DETECTED", "red", nil, 40, "Arial", "bold")
-        end
-    end
-
     gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize, "IronMario Tracker", "lightblue", nil, fontSize,
         fontFace, nil, "center")
-    gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 2, "v1.0.2u1", "gray", nil, fontSize, fontFace, nil,
-        "center")
+    gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 2, trackerVersion, "gray", nil, fontSize, fontFace,
+        nil, "center")
 
     if not validVersion then
         gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 10, "Incompatible\nROM version!", "red", nil,
@@ -896,7 +886,6 @@ function renderGui()
 
     gui.drawString(gameWidth, fontSize + (fontSize * 3), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize,
         fontFace)
-
     gui.drawString(gameWidth, fontSize + (fontSize * 4), "Run Time: " .. formatElapsedTime(displayData.elapsedTime),
         nil, nil, fontSize, fontFace)
     gui.drawString(gameWidth, fontSize + (fontSize * 5), "Stars: " .. displayData.stars, nil, nil, fontSize, fontFace)
@@ -913,36 +902,117 @@ function renderGui()
     gui.drawString(gameWidth, fontSize + (fontSize * 9), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize,
         fontFace)
 
-    gui.drawString(gameWidth, fontSize + (fontSize * 11), "== Warp Map ==", "orange", nil, fontSize, fontFace)
+    -- Define the ordered list of keys to display
+    local orderedKeys = {"BoB", "WF", "JRB", "CCM", "BBH", "HMC", "LLL", "SSL", "DDD", "SL", "WDW", "TTM", "THI", "TTC",
+                         "RR", "PSS", "SA", "WMotR", "Wing", "Metal", "Vanish", "BitDW", "BitFS", "BitS"}
 
-    local drawIndex = 12
+    -- Setup x positions for the two columns.
+    local leftColX = gameWidth
+    local rightColX = gameWidth + math.floor(padWidth / 2)
 
-    if next(warp_log) then
-        for warpFrom, warpTo in pairs(warp_log) do
-            gui.drawString(gameWidth, fontSize + (fontSize * drawIndex), string.format("  %s → %s", warpFrom, warpTo),
-                nil, nil, fontSize, fontFace)
-            drawIndex = drawIndex + 1
+    -----------------------------
+    -- Warp Log Section Layout --
+    -----------------------------
+    local warpHeaderY = fontSize + (fontSize * 11)
+    gui.drawString(gameWidth + math.floor(padWidth / 2), warpHeaderY, "== Warp Map ==", "orange", nil, fontSize,
+        fontFace, nil, "center")
+    local warpTableStartY = warpHeaderY + (fontSize * 2) -- table starts one line below the header
+
+    -- Build an ordered list of warp log entries (only add if an entry exists for that key)
+    local warpEntries = {}
+    for _, key in ipairs(orderedKeys) do
+        if warp_log[key] then
+            table.insert(warpEntries, {
+                key = key,
+                value = warp_log[key]
+            })
         end
     end
 
-    drawIndex = drawIndex + 1
+    -- Render the warp log in 2 columns (fill left column first)
+    for i, entry in ipairs(warpEntries) do
+        local col, row
+        if i <= 12 then
+            col = 1
+            row = i
+        else
+            col = 2
+            row = i - 12
+        end
+        local x = (col == 1) and leftColX or rightColX
+        local y = warpTableStartY + (row - 1) * fontSize
+        gui.drawString(x + (padWidth / 4), y, string.format("%s → %s", entry.key, entry.value), nil, nil, fontSize,
+            fontFace, nil, "center")
+    end
 
-    gui.drawString(gameWidth, fontSize + (fontSize * drawIndex), "== Stars Collected ==", "yellow", nil, fontSize,
-        fontFace)
+    -- Calculate how many rows were used in the warp log section.
+    -- (If there are fewer than 12 entries, use that number; otherwise, cap at 12.)
+    local warpRowsUsed = (#warpEntries > 0) and math.min(12, #warpEntries) or 0
 
-    drawIndex = drawIndex + 1
+    ---------------------------------
+    -- Star Tracker Section Layout --
+    ---------------------------------
+    -- Now position the star tracker header based on the warp log height.
+    local starHeaderY = warpTableStartY + (warpRowsUsed * fontSize) + fontSize
+    gui.drawString(gameWidth + math.floor(padWidth / 2), starHeaderY, "== Stars Collected ==", "yellow", nil, fontSize,
+        fontFace, nil, "center")
+    local starTableStartY = starHeaderY + (fontSize * 2) -- table starts one line below the header
 
-    if next(starTracker) then
-        for levelAbbr, starCount in pairs(starTracker) do
-            gui.drawString(gameWidth, fontSize + (fontSize * drawIndex),
-                string.format("  %s: %d", levelAbbr, starCount), nil, nil, fontSize, fontFace)
-            drawIndex = drawIndex + 1
+    -- Build an ordered list of star tracker entries (only add if an entry exists for that key)
+    local starEntries = {}
+    for _, key in ipairs(orderedKeys) do
+        if starTracker[key] then
+            table.insert(starEntries, {
+                key = key,
+                count = starTracker[key]
+            })
+        end
+    end
+
+    -- Calculate maximum label width for each column (in pixels)
+    local leftMaxWidth = 0
+    local rightMaxWidth = 0
+    for i, entry in ipairs(starEntries) do
+        local labelWidth = string.len(entry.key) * charWidth
+        if i <= 12 then
+            if labelWidth > leftMaxWidth then
+                leftMaxWidth = labelWidth
+            end
+        else
+            if labelWidth > rightMaxWidth then
+                rightMaxWidth = labelWidth
+            end
+        end
+    end
+
+    -- Render the star tracker entries in 2 columns (left column fills first)
+    for i, entry in ipairs(starEntries) do
+        local col, row
+        if i <= 12 then
+            col = 1
+            row = i
+        else
+            col = 2
+            row = i - 12
+        end
+        local x = (col == 1) and leftColX or rightColX
+        local y = starTableStartY + (row - 1) * (fontSize + 3)
+        -- Draw the level key label
+        gui.drawString(x, y, entry.key, nil, nil, fontSize, fontFace)
+        -- Determine the starting position for star icons based on the maximum label width for the column
+        local spacing = fontSize -- additional space after the label
+        local maxLabelWidth = (col == 1) and leftMaxWidth or rightMaxWidth
+        local iconsStartX = x + maxLabelWidth + spacing
+        -- Draw the star icons for the collected stars
+        for j = 1, entry.count do
+            gui.drawImage("ironmario_tracker/star.png", iconsStartX + (j - 1) * fontSize, y, fontSize * 0.9,
+                fontSize * 0.9)
         end
     end
 
     if showMusic then
-        gui.drawString(20 + math.floor(charWidth / 2), gameHeight - (20 + (math.floor(fontSize * 1.25))), musicName,
-            nil, nil, fontSize, fontFace)
+        gui.drawString(20 + math.floor(charWidth / 2), gameHeight - (20 + math.floor(fontSize * 1.25)), musicName, nil,
+            nil, fontSize, fontFace)
     end
 end
 
@@ -1044,12 +1114,6 @@ while true do
             end
         end
 
-        -- if isMarioActionInList(mario_action, mario_on_shell) then
-        --     taint_detected = true
-        -- else
-        --     taint_detected = false
-        --     gui.clearGraphics()
-        -- end
         -- Checks to see if mario has taken damage or not by using the damage meter.
         if damage_was_taken and not in_water and not taking_gas_damage and not run_end and run_start and elapsedTime > 5 then
             reason = string.format("Took damage from Enemy or fall")
@@ -1098,7 +1162,6 @@ while true do
             run_end = false
             damage_was_taken = false
             logged_run = false
-            taint_detected = false
             shouldSaveAttempt = false
             reason = ""
         end
@@ -1120,7 +1183,6 @@ while true do
         displayData.runStatusPB = "RUN OVER - NEW PB!"
         displayData.warpLog = warp_log
         displayData.logged_run = logged_run
-        displayData.taint_detected = taint_detected
         displayData.marioInWater = in_water
         displayData.marioPos = mario_pos
         displayData.music = music
