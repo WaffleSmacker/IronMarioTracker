@@ -1,4 +1,4 @@
-local json = require("sm64_rando_tracker/Json") -- Adjust the path based on your setup
+local json = require("ironmario_tracker/Json") -- Adjust the path based on your setup
 
 -- SM64 Lua script for BizHawk emulator
 -- Prints Mario, camera, terrain to screen
@@ -32,9 +32,10 @@ if romVersion == validRomVersion then
 end
 
 -- Attempts data
-local attemptsFile = "sm64_rando_tracker/attempts.txt"
-local attemptDataCsv = "sm64_rando_tracker/attempts_data.csv"
-local pbFile = "sm64_rando_tracker/pb_stars.txt"
+local attemptsFile = "ironmario_tracker/attempts.txt"
+local attemptDataCsv = "ironmario_tracker/attempts_data.csv"
+local pbFile = "ironmario_tracker/pb_stars.txt"
+local songFile = "ironmario_tracker/song_info.txt"
 local pbStars = 0
 local attemptCount = 0
 local currentSeedKey = ""
@@ -50,6 +51,7 @@ local addressRandomizerGameSeed = 0x1ca6ac -- gRandomizerGameSeed
 local addressMarioGeometry = 0x19bccc -- sMarioGeometry
 local addressDelayedWarpOp = 0x19ca4c -- sDelayedWarpOp
 local addressCurrIntendedLevel = 0x19b7fc -- gCurrentIntendedLevel
+local addressCurrentMusic = 0x1928ae -- sCurrentMusic
 
 local addressMarioInput = addressMario + 0x2
 local addressMarioFlags = addressMario + 0x4
@@ -72,6 +74,8 @@ local logged_run = false
 local damage_was_taken = false
 local taint_detected = false
 local mario_action
+local music_name = "Super Mario 64 - Title Screen"
+local previous_music
 
 local previous_hp = 8
 local previous_level = 1
@@ -94,6 +98,7 @@ local displayData = {
     taint_detected = false,
     marioInWater = false,
     marioPos,
+    music = 14,
     warpLog = {}
 }
 
@@ -107,6 +112,9 @@ local mario_fell_out_of_course = {6440, 6441, 6442}
 local mario_on_shell = {545326150, 42010778} -- DGR likes the taint
 
 local levels_with_no_water = {9, 24, 4, 22, 8, 14, 15, 27, 31, 29, 18, 17, 30, 19}
+
+local showMusic = false
+local musicTogglePressed = false
 
 -- Function to check if a level is in the list
 function LevelHasWater(level)
@@ -159,6 +167,173 @@ LocationMap = {
     [26] = {"Garden", "Garden"}, -- 26 to 6 is no warp, 26 to anything else is warp
     [1] = {"Menu", "Menu"}
 }
+
+-- Function to get song name by number
+function getSongName(number)
+    local songs = {
+        -- [0] = { "nothing", "nothing" },
+        -- [1] = { "Super Mario 64", "Collect a Star" },
+        -- [2] = { "Super Mario 64", "Course Select" },
+        -- [3] = { "Super Mario 64", "Koopa Message" },
+        -- [4] = { "Super Mario 64", "Credits" },
+        -- [5] = { "Super Mario 64", "Puzzle Solved" },
+        -- [6] = { "Super Mario 64", "Toad Message" },
+        -- [7] = { "Super Mario 64", "Victory Theme" },
+        -- [8] = { "Super Mario 64", "Ending" },
+        -- [9] = { "Super Mario 64", "Key Collection" },
+        -- [10] = { "Super Mario 64", "Star Spawn" },
+        -- [11] = { "Super Mario 64", "High Score" },
+        [12] = {"Super Mario 64", "Endless Stairs"},
+        [13] = {"Super Mario 64", "Merry Go Round"},
+        [14] = {"Super Mario 64", "Title Screen"},
+        [15] = {"Super Mario 64", "Bob-omb Battlefield"},
+        [16] = {"Super Mario 64", "Inside Castle"},
+        [17] = {"Super Mario 64", "Dire Dire Docks"},
+        [18] = {"Super Mario 64", "Lethal Lava Land"},
+        [19] = {"Super Mario 64", "Title"},
+        [20] = {"Super Mario 64", "Snowman's Land"},
+        [21] = {"Super Mario 64", "Cool Cool Mountain Slide"},
+        [22] = {"Super Mario 64", "Big Boo's Haunt"},
+        [23] = {"Super Mario 64", "Piranha Plant Lullaby"},
+        [24] = {"Super Mario 64", "Hazy Maze Cave"},
+        [25] = {"Super Mario 64", "Power-up"},
+        [26] = {"Super Mario 64", "Metal Cap"},
+        [27] = {"Super Mario 64", "Koopa Road"},
+        [28] = {"Super Mario 64", "Race"},
+        [29] = {"Super Mario 64", "Boss Battle"},
+        [30] = {"Super Mario 64", "Bowser Battle"},
+        [31] = {"Super Mario 64", "File Select"},
+        [32] = {"Super Mario 64", "Shell Power-up"},
+        [33] = {"Super Mario 64", "Start Menu"},
+        [34] = {"Bomberman 64", "Green Garden"},
+        [35] = {"Bomberman 64", "Blue Resort"},
+        [36] = {"Bomberman Hero", "Redial"},
+        [37] = {"Wii", "Shop Channel"},
+        [38] = {"Chrono Trigger", "Spekkio's Theme"},
+        [39] = {"Castlevania: Order of Ecclesia", "A Prologue"},
+        [40] = {"Diddy Kong Racing", "Credits (Port)"},
+        [41] = {"Diddy Kong Racing", "Frosty Village"},
+        [42] = {"Diddy Kong Racing", "Spacedust Alley"},
+        [43] = {"Donkey Kong Country", "Aquatic Ambience"},
+        [44] = {"Donkey Kong Country 2", "Forest Interlude"},
+        [45] = {"Donkey Kong Country 2", "Stickerbrush Symphony"},
+        [46] = {"Diddy Kong Racing", "Greenwood Village"},
+        [47] = {"Donkey Kong Country 2", "In a Snow-Bound Land"},
+        [48] = {"EarthBound", "Home Sweet Home"},
+        [49] = {"EarthBound", "Onett Theme"},
+        [50] = {"The Legend of Zelda: Ocarina of Time", "Gerudo Valley"},
+        [51] = {"Pokémon Shuffle", "Stage (Hard)"},
+        [52] = {"Super Mario 64", "Inside Castle Walls (Remix)"},
+        [53] = {"Kirby: Nightmare in Dream Land", "Butter Building"},
+        [54] = {"Kirby 64: The_Crystal Shards", "Shiver Star"},
+        [55] = {"Kirby's Adventure", "Yogurt Yard"},
+        [56] = {"Kirby Super Star", "Mine Cart"},
+        [57] = {"The Legend of Zelda: Majora's Mask", "Clock Town Day 1"},
+        [58] = {"Mario & Luigi: Partners in Time", "Thwomp Caverns"},
+        [59] = {"Mario Kart 8", "Rainbow Road"},
+        [60] = {"Mario Kart 64", "Koopa Beach"},
+        [61] = {"Mario Kart Wii", "Maple Treeway"},
+        [62] = {"Mega Man 3", "Spark Man Stage"},
+        [63] = {"Mega Man Battle Network 5", "Hero Theme"},
+        [64] = {"Mario Kart 64", "Moo Moo Farm"},
+        [65] = {"New Super Mario Bros.", "Athletic Theme"},
+        [66] = {"New Super Mario Bros.", "Desert Theme"},
+        [67] = {"New Super Mario Bros. U", "Overworld"},
+        [68] = {"New Super Mario Bros. Wii", "Forest"},
+        [69] = {"The Legend of Zelda: Ocarina of Time", "Lost Woods"},
+        [70] = {"Pilotwings", "Light Plane"},
+        [71] = {"Pokémon Diamond & Pearl", "Eterna Forest"},
+        [72] = {"Pokémon HeartGold & SoulSilver", "Lavender Town"},
+        [73] = {"Mario Party", "Mario's Rainbow Castle"},
+        [74] = {"Bomberman 64", "Red Mountain"},
+        [75] = {"Deltarune", "Rude Buster"},
+        [76] = {"Super Mario 3D World", "Overworld"},
+        [77] = {"Super Mario Sunshine", "No-Pack/Puzzle Level"},
+        [78] = {"Snowboard Kids", "Big Snowman"},
+        [79] = {"Sonic Adventure", "Emerald Coast"},
+        [80] = {"Sonic the Hedgehog", "Green Hill Zone"},
+        [81] = {"Super Castlevania IV", "Underwater City"},
+        [82] = {"Super Mario Land", "Birabuto Kingdom"},
+        [83] = {"Super Mario RPG", "Inside the Forest Maze"},
+        [84] = {"Super Mario Sunshine", "Delfino Plaza"},
+        [85] = {"Super Mario Sunshine", "Gelato Beach"},
+        [86] = {"Yoshi's Island (SNES)", "Caves"},
+        [87] = {"The Legend of Zelda: Ocarina of Time", "Water Temple"},
+        [88] = {"Wave Race 64", "Sunny Beach"},
+        [89] = {"Final Fantasy VII", "WFH"},
+        [90] = {"The Legend of Zelda: Ocarina of Time", "Kokiri Forest"},
+        [91] = {"The Legend of Zelda: Ocarina of Time", "Zora's Domain"},
+        [92] = {"The Legend of Zelda: Ocarina of Time", "Kakariko Village"},
+        [93] = {"???", "A Morning Jog"},
+        [94] = {"The Legend of Zelda: The Wind Waker", "Outset Island"},
+        [95] = {"Super Paper Mario", "Flipside"},
+        [96] = {"Super Mario Galaxy", "Ghostly Galaxy"},
+        [97] = {"Super Mario RPG", "Nimbus Land"},
+        [98] = {"Super Mario Galaxy", "Battlerock Galaxy"},
+        [99] = {"Sonic Adventure", "Windy Hill"},
+        [100] = {"Super Paper Mario", "The Overthere Stair"},
+        [101] = {"Super Mario Sunshine", "Secret Course"},
+        [102] = {"Super Mario Sunshine", "Bianco Hills"},
+        [103] = {"Super Paper Mario", "Lineland Road"},
+        [104] = {"Paper Mario: The Thousand-Year Door", "X-Naut Fortress"},
+        [105] = {"Mario & Luigi: Bowser's Inside Story", "Bumpsy Plains"},
+        [106] = {"Super Mario World", "Athletic Theme"},
+        [107] = {"The Legend of Zelda: Skyward Sword", "Skyloft"},
+        [108] = {"Super Mario World", "Castle"},
+        [109] = {"Super Mario Galaxy", "Comet Observatory"},
+        [110] = {"Banjo-Kazooie", "Freezeezy Peak"},
+        [111] = {"Mario Kart DS", "Waluigi Pinball"},
+        [112] = {"Kirby 64: The Crystal Shards", "Factory Inspection"},
+        [113] = {"Donkey Kong 64", "Creepy Castle"},
+        [114] = {"Paper Mario", "Forever Forest"},
+        [115] = {"Super Mario Bros.", "Bowser Theme (Remix)"},
+        [116] = {"The Legend of Zelda: Twilight Princess", "Gerudo Desert"},
+        [117] = {"Yoshi's Island", "Overworld"},
+        [118] = {"Mario & Luigi: Partners in Time", "Gritzy Desert"},
+        [119] = {"Donkey Kong 64", "Angry Aztec"},
+        [120] = {"Mario & Luigi: Partners in Time", "Yoshi's Village"},
+        [121] = {"Touhou", "Youkai Mountain"},
+        [122] = {"Mario & Luigi: Bowser's Inside Story", "Deep Castle"},
+        [123] = {"Paper Mario: The Thousand-Year Door", "Petal Meadows"},
+        [124] = {"Mario Party", "Yoshi's Tropical Island"},
+        [125] = {"Super Mario 3D World", "Piranha Creek"},
+        [126] = {"Final Fantasy VII", "Temple of the Ancients"},
+        [127] = {"Paper Mario", "Dry Dry Desert"},
+        [128] = {"Rayman", "Band Land"},
+        [129] = {"Donkey Kong 64", "Hideout Helm"},
+        [130] = {"Donkey Kong 64", "Frantic Factory"},
+        [131] = {"Super Paper Mario", "Sammer's Kingdom"},
+        [132] = {"Super Mario Galaxy", "Purple Comet"},
+        [133] = {"The Legend of Zelda: Majora's Mask", "Stone Tower Temple"},
+        [134] = {"Banjo-Kazooie", "Treasure Trove Cove (Port)"},
+        [135] = {"Banjo-Kazooie", "Gobi's Valley"},
+        [136] = {"Super Mario 64: Last Impact", "Unknown"},
+        [137] = {"Donkey Kong 64", "Fungi Forest"},
+        [138] = {"Paper Mario: The Thousand-Year Door", "Palace of Shadow"},
+        [139] = {"Paper Mario: The Thousand-Year Door", "Rogueport Sewers"},
+        [140] = {"Super Mario Sunshine", "Secret Course"},
+        [141] = {"Pokémon Mystery Dungeon", "Sky Tower"},
+        [142] = {"Super Mario Bros. 3", "Overworld"},
+        [143] = {"Super Mario RPG", "Mario's Pad"},
+        [144] = {"Super Mario RPG", "Sunken Ship"},
+        [145] = {"Super Mario Galaxy", "Buoy Base Galaxy"},
+        [146] = {"Donkey Kong 64", "Crystal Caves"},
+        [147] = {"Super Paper Mario", "Floro Caverns"},
+        [148] = {"Ys", "Title Theme"},
+        [149] = {"The Legend of Zelda: Twilight Princess", "Lake Hylia"},
+        [150] = {"Mario Kart 64", "Frappe Snowland"},
+        [151] = {"Donkey Kong 64", "Gloomy Galleon"},
+        [152] = {"Mario Kart 64", "Bowser's Castle"},
+        [153] = {"Mario Kart 64", "Rainbow Road"}
+    }
+
+    local entry = songs[number]
+    if entry then
+        return entry[1] .. " - " .. entry[2]
+    else
+        return ''
+    end
+end
 
 WarpLocations = {
     ["BoB"] = {166, 167, 168, 211, 212}, -- Bob-Omb Battlefield (BoB)
@@ -418,6 +593,15 @@ function savePB(stars)
     console.write("Saved PB Stars: " .. stars .. "\n")
 end
 
+-- Save Music to text file
+function saveMusic(music_name)
+    local file = io.open(songFile, "w")
+    if file then
+        file:write(tostring(music_name))
+        file:close()
+    end
+end
+
 -- Call loadPB at the beginning of the script to initialize pbStars
 loadPB()
 
@@ -472,7 +656,7 @@ end
 local hp_colors = {"red", "red", "yellow", "yellow", "lightgreen", "lightgreen", "lightblue", "lightblue"}
 
 -- Warp log storage
-local warpLogFile = "sm64_rando_tracker/warp_log.json"
+local warpLogFile = "ironmario_tracker/warp_log.json"
 local warp_log = {}
 
 -- Load the warp log from the file
@@ -630,9 +814,15 @@ function renderGui()
     local fontSize = math.floor(gameHeight / 50)
     local charWidth = math.floor(fontSize / 1.6)
 
+    local iconSize = math.floor(gameHeight / 12)
+
+    local musicName = getSongName(displayData.music)
+
     gui.clearGraphics()
 
     client.SetGameExtraPadding(0, 0, padWidth, 0)
+
+    gui.drawImage("ironmario_tracker/logo.png", (gameWidth + padWidth) - iconSize, 0, iconSize, iconSize)
 
     if displayData.taint_detected then
         for i = 1, 100 do -- Adjust the number to spam more or fewer instances
@@ -703,9 +893,10 @@ function renderGui()
         end
     end
 
-    local iconSize = math.floor(gameHeight / 12)
-
-    gui.drawImage("sm64_rando_tracker/logo.png", (gameWidth + padWidth) - iconSize, 0, iconSize, iconSize)
+    if showMusic then
+        gui.drawString(20 + math.floor(charWidth / 2), gameHeight - (20 + (math.floor(fontSize * 1.25))), musicName,
+            nil, nil, fontSize, fontFace)
+    end
 end
 
 ---------------------------------
@@ -732,6 +923,7 @@ while true do
         stars = memory.read_u16_be(addressHudStars)
         level = memory.read_u16_be(addressCurrLevelNum)
         terrain = memory.read_u16_be(addressMarioGeometryCurrFloorType)
+        music = memory.read_u16_be(addressCurrentMusic)
         seed = memory.read_u32_be(addressRandomizerGameSeed)
         mario_action = memory.read_u32_be(addressMarioAction)
         mario_pos = read3float(addressMarioPos)
@@ -752,6 +944,8 @@ while true do
         local levelName = LocationMap[level] and LocationMap[level][1] or "Unknown Level"
         local levelAbbr = LocationMap[level] and LocationMap[level][2] or "Unknown"
         local levelId = level
+
+        local musicName = getSongName(displayData.music)
 
         -- Detect and log warp transitions
         local intended_level = memory.read_u32_be(addressCurrIntendedLevel)
@@ -882,11 +1076,28 @@ while true do
         displayData.taint_detected = taint_detected
         displayData.marioInWater = in_water
         displayData.marioPos = mario_pos
+        displayData.music = music
+
+        if displayData.music and previous_music ~= musicName then
+            saveMusic(musicName)
+            previous_music = musicName
+        end
     end
 
     --------------------------------
     ----- Display Tracker Info -----
     --------------------------------
+
+    local currentInputs = joypad.get()
+
+    if currentInputs["P1 L"] and currentInputs["P1 R"] and currentInputs["P1 A"] and currentInputs["P1 B"] and
+        not musicTogglePressed then
+        musicTogglePressed = true
+        showMusic = not showMusic
+    elseif (not currentInputs["P1 L"] or not currentInputs["P1 R"] or not currentInputs["P1 A"] or
+        not currentInputs["P1 B"]) and musicTogglePressed then
+        musicTogglePressed = false
+    end
 
     if (emu.framecount() % 60 == 0) then
         renderGui()
