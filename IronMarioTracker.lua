@@ -36,6 +36,54 @@ local attemptsFile = "ironmario_tracker/attempts.txt"
 local attemptDataCsv = "ironmario_tracker/attempts_data.csv"
 local pbFile = "ironmario_tracker/pb_stars.txt"
 local songFile = "ironmario_tracker/song_info.txt"
+local warpLogFile = "ironmario_tracker/warp_log.json"
+
+local function fileExists(path)
+    local file = io.open(path, "r")
+    if file then
+        file:close()
+        return true
+    else
+        return false
+    end
+end
+
+local function copyFile(source, destination)
+    local srcFile = io.open(source, "r")
+    if not srcFile then
+        console.write("Source file not found: " .. source .. "\n")
+        return
+    end
+    local content = srcFile:read("*a")
+    srcFile:close()
+    local dstFile = io.open(destination, "w")
+    if dstFile then
+        dstFile:write(content)
+        dstFile:close()
+        console.write("Migrated file: " .. destination .. "\n")
+    else
+        console.write("Failed to create file: " .. destination .. "\n")
+    end
+end
+
+-- List of file names to migrate
+local filesToMigrate = {"attempts.txt", "attempts_data.csv", "pb_stars.txt", "song_info.txt", "warp_log.json"}
+
+local oldDir = "sm64_rando_tracker/"
+local newDir = "ironmario_tracker/"
+
+for _, filename in ipairs(filesToMigrate) do
+    local newPath = newDir .. filename
+    -- Only migrate if the file does not already exist in the new directory.
+    if not fileExists(newPath) then
+        local oldPath = oldDir .. filename
+        if fileExists(oldPath) then
+            console.write("Migrating file: " .. filename .. "\n")
+            copyFile(oldPath, newPath)
+        end
+    end
+end
+
 local pbStars = 0
 local attemptCount = 0
 local currentSeedKey = ""
@@ -656,7 +704,6 @@ end
 local hp_colors = {"red", "red", "yellow", "yellow", "lightgreen", "lightgreen", "lightblue", "lightblue"}
 
 -- Warp log storage
-local warpLogFile = "ironmario_tracker/warp_log.json"
 local warp_log = {}
 
 -- Load the warp log from the file
