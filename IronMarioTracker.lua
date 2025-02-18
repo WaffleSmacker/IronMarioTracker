@@ -121,7 +121,6 @@ local run_end = false
 local run_start = false
 local logged_run = false
 local damage_was_taken = false
-local taint_detected = false
 local mario_action
 local music_name = "Super Mario 64 - Title Screen"
 local previous_music
@@ -144,7 +143,6 @@ local displayData = {
     marioAction = 0,
     pbStars = 0,
     logged_run = false,
-    taint_detected = false,
     marioInWater = false,
     marioPos,
     music = 14,
@@ -158,7 +156,6 @@ starCountLines = 1
 
 local mario_water_damage = {805446341, 805319364, 805446371, 805446344}
 local mario_fell_out_of_course = {6440, 6441, 6442}
-local mario_on_shell = {545326150, 42010778} -- DGR likes the taint
 
 local levels_with_no_water = {9, 24, 4, 22, 8, 14, 15, 27, 31, 29, 18, 17, 30, 19}
 
@@ -859,7 +856,7 @@ function renderGui()
 
     local padWidth = math.floor((gameHeight * (16 / 9)) - gameWidth)
 
-    local fontSize = math.floor(gameHeight / 50)
+    local fontSize = math.max(math.floor(gameHeight / 50), 8)
     local charWidth = math.floor(fontSize / 1.6)
 
     local iconSize = math.floor(gameHeight / 12)
@@ -871,14 +868,6 @@ function renderGui()
     client.SetGameExtraPadding(0, 0, padWidth, 0)
 
     gui.drawImage("ironmario_tracker/logo.png", (gameWidth + padWidth) - iconSize, 0, iconSize, iconSize)
-
-    if displayData.taint_detected then
-        for i = 1, 100 do -- Adjust the number to spam more or fewer instances
-            local middle_x = math.floor(gameWidth / 2) - 200
-            local middle_y = screenHeight - math.floor(screenHeight / 6)
-            gui.drawText(middle_x, middle_y - 200, "TAINT DETECTED", "red", nil, 40, "Arial", "bold")
-        end
-    end
 
     gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize, "IronMario Tracker", "lightblue", nil, fontSize,
         fontFace, nil, "center")
@@ -1125,12 +1114,6 @@ while true do
             end
         end
 
-        -- if isMarioActionInList(mario_action, mario_on_shell) then
-        --     taint_detected = true
-        -- else
-        --     taint_detected = false
-        --     gui.clearGraphics()
-        -- end
         -- Checks to see if mario has taken damage or not by using the damage meter.
         if damage_was_taken and not in_water and not taking_gas_damage and not run_end and run_start and elapsedTime > 5 then
             reason = string.format("Took damage from Enemy or fall")
@@ -1179,7 +1162,6 @@ while true do
             run_end = false
             damage_was_taken = false
             logged_run = false
-            taint_detected = false
             shouldSaveAttempt = false
             reason = ""
         end
@@ -1201,7 +1183,6 @@ while true do
         displayData.runStatusPB = "RUN OVER - NEW PB!"
         displayData.warpLog = warp_log
         displayData.logged_run = logged_run
-        displayData.taint_detected = taint_detected
         displayData.marioInWater = in_water
         displayData.marioPos = mario_pos
         displayData.music = music
