@@ -648,13 +648,11 @@ function renderGui()
         "center")
 
     if not validVersion then
-        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 10, "Running incompatible", "red", nil,
+        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 10, "Incompatible\nROM version!", "red", nil,
+            fontSize * 2, fontFace, nil, "center")
+        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 15, "Expected: " .. validRomVersion, "red", nil,
             fontSize, fontFace, nil, "center")
-        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 11, "ROM version!", "red", nil, fontSize,
-            fontFace, nil, "center")
-        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 13, "Expected: " .. validRomVersion, "red", nil,
-            fontSize, fontFace, nil, "center")
-        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 14, "Running: " .. romVersion, "red", nil,
+        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 16, "Running: " .. romVersion, "red", nil,
             fontSize, fontFace, nil, "center")
         return
     end
