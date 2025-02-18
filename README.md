@@ -15,6 +15,12 @@ To date it can help you by keeping track of your best PB, warp mapping, and trac
 
 # Changelog
 
+## v1.0.2u2 - 2025-02-17
+
+### Interface
+
+- Changed star count display to something BETTER.
+
 ## v1.0.2u1 - 2025-02-17
 
 ### IronMario Version: v1.0.2
