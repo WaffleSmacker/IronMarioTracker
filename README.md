@@ -16,6 +16,11 @@ The font size of the tracker is determined by the game's resolution. If the trac
 This tracker was put together to support streamers and gamers alike who are taking on the IronMario challenge.
 To date it can help you by keeping track of your best PB, warp mapping, and tracking where you got your stars.
 
+# Credits
+
+WaffleSmacker for basically everything.
+KaaniDog for making it look a little better and adding **stars**.
+
 # Changelog
 
 ## v1.0.2u2 - 2025-02-18

@@ -9,7 +9,7 @@ local json = require("ironmario_tracker/Json") -- Adjust the path based on your 
 
 local fontFace = "Lucida Console"
 local validRomVersion = "v1.0.2"
-local trackerVersion = "1.0.2u2"
+local trackerVersion = "1.0.2u3"
 
 -- Reset the console when resetting
 console.clear()
@@ -871,8 +871,6 @@ function renderGui()
 
     gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize, "IronMario Tracker", "lightblue", nil, fontSize,
         fontFace, nil, "center")
-    gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 2, trackerVersion, "gray", nil, fontSize, fontFace,
-        nil, "center")
 
     if not validVersion then
         gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 10, "Incompatible\nROM version!", "red", nil,
@@ -884,22 +882,22 @@ function renderGui()
         return
     end
 
-    gui.drawString(gameWidth, fontSize + (fontSize * 3), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize,
+    gui.drawString(gameWidth, fontSize + (fontSize * 2), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize,
         fontFace)
-    gui.drawString(gameWidth, fontSize + (fontSize * 4), "Run Time: " .. formatElapsedTime(displayData.elapsedTime),
+    gui.drawString(gameWidth, fontSize + (fontSize * 3), "Run Time: " .. formatElapsedTime(displayData.elapsedTime),
         nil, nil, fontSize, fontFace)
-    gui.drawString(gameWidth, fontSize + (fontSize * 5), "Stars: " .. displayData.stars, nil, nil, fontSize, fontFace)
-    gui.drawString(gameWidth, fontSize + (fontSize * 6), "Level: " .. displayData.levelAbbr, nil, nil, fontSize,
+    gui.drawString(gameWidth, fontSize + (fontSize * 4), "Stars: " .. displayData.stars, nil, nil, fontSize, fontFace)
+    gui.drawString(gameWidth, fontSize + (fontSize * 5), "Level: " .. displayData.levelAbbr, nil, nil, fontSize,
         fontFace)
-    gui.drawString(gameWidth, fontSize + (fontSize * 7), "Seed: " .. displayData.seed, nil, nil, fontSize, fontFace)
+    gui.drawString(gameWidth, fontSize + (fontSize * 6), "Seed: " .. displayData.seed, nil, nil, fontSize, fontFace)
 
     if displayData.logged_run and displayData.pbStars == displayData.stars then
-        gui.drawString(gameWidth, fontSize + (fontSize * 8), "RUN OVER - NEW PB!", "red", nil, fontSize, fontFace)
+        gui.drawString(gameWidth, fontSize + (fontSize * 7), "RUN OVER - NEW PB!", "red", nil, fontSize, fontFace)
     elseif displayData.logged_run then
-        gui.drawString(gameWidth, fontSize + (fontSize * 8), "RUN OVER", "red", nil, fontSize, fontFace)
+        gui.drawString(gameWidth, fontSize + (fontSize * 7), "RUN OVER", "red", nil, fontSize, fontFace)
     end
 
-    gui.drawString(gameWidth, fontSize + (fontSize * 9), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize,
+    gui.drawString(gameWidth, fontSize + (fontSize * 8), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize,
         fontFace)
 
     -- Define the ordered list of keys to display
@@ -913,7 +911,7 @@ function renderGui()
     -----------------------------
     -- Warp Log Section Layout --
     -----------------------------
-    local warpHeaderY = fontSize + (fontSize * 11)
+    local warpHeaderY = fontSize + (fontSize * 10)
     gui.drawString(gameWidth + math.floor(padWidth / 2), warpHeaderY, "== Warp Map ==", "orange", nil, fontSize,
         fontFace, nil, "center")
     local warpTableStartY = warpHeaderY + (fontSize * 2) -- table starts one line below the header
@@ -1005,8 +1003,8 @@ function renderGui()
         local iconsStartX = x + maxLabelWidth + spacing
         -- Draw the star icons for the collected stars
         for j = 1, entry.count do
-            gui.drawImage("ironmario_tracker/star.png", iconsStartX + (j - 1) * fontSize, y, fontSize * 0.9,
-                fontSize * 0.9)
+            gui.drawImage("ironmario_tracker/star.png", iconsStartX + (j - 1) * fontSize, y + (fontSize * 0.1),
+                fontSize * 0.8, fontSize * 0.8)
         end
     end
 
@@ -1014,6 +1012,10 @@ function renderGui()
         gui.drawString(20 + math.floor(charWidth / 2), gameHeight - (20 + math.floor(fontSize * 1.25)), musicName, nil,
             nil, fontSize, fontFace)
     end
+
+    gui.drawString(gameWidth + padWidth, gameHeight - fontSize,
+        "v" .. trackerVersion .. ' by WaffleSmacker and KaaniDog', "gray", nil, math.max(math.floor(fontSize / 2), 8),
+        fontFace, nil, "right")
 end
 
 ---------------------------------
