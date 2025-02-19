@@ -9,7 +9,7 @@ local json = require("ironmario_tracker/Json") -- Adjust the path based on your 
 
 local fontFace = "Lucida Console"
 local validRomVersion = "v1.0.2"
-local trackerVersion = "1.0.2u3"
+local trackerVersion = "1.0.2u2"
 
 -- Reset the console when resetting
 console.clear()
