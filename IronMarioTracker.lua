@@ -2,8 +2,8 @@
 -- This script tracks various aspects of a run (attempt count, stars, warp mapping, etc.) by reading emulator memory,
 -- logging data to files, and rendering an on-screen overlay.
 -- It uses lunajson for JSON encoding and pl.tablex for deep table functions.
-local json = require("lunajson") -- JSON encoding/decoding library
-local tablex = require("pl.tablex") -- Extended table functions (e.g., deepcopy, deepcompare)
+local json = require("lib.lunajson") -- JSON encoding/decoding library
+local tablex = require("lib.pl.tablex") -- Extended table functions (e.g., deepcopy, deepcompare)
 
 -- Main configuration table that holds version info, file paths, memory addresses, and user data.
 local CONFIG = {
