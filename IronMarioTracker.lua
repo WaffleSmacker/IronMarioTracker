@@ -1,222 +1,97 @@
-local json = require("ironmario_tracker/Json") -- Adjust the path based on your setup
+-- IronMario Tracker Script
+-- This script tracks various aspects of a run (attempt count, stars, warp mapping, etc.) by reading emulator memory,
+-- logging data to files, and rendering an on-screen overlay.
+-- It uses lunajson for JSON encoding and pl.tablex for deep table functions.
+local json = require("lunajson") -- JSON encoding/decoding library
+local tablex = require("pl.tablex") -- Extended table functions (e.g., deepcopy, deepcompare)
 
--- SM64 Lua script for BizHawk emulator
--- Prints Mario, camera, terrain to screen
-
------------------------------
---------- Variables ---------
------------------------------
-
-local fontFace = "Lucida Console"
-local validRomVersion = "v1.0.2"
-local trackerVersion = "1.0.2u2"
-
--- Reset the console when resetting
-console.clear()
-
--------------------------
------ Version Check -----
--------------------------
-local validVersion = false
-
-memory.usememorydomain("ROM")
-local romVersionBytes = memory.read_bytes_as_array(0x2A, 6)
-
-local romVersion = ""
-
-for i = 1, 6 do
-    romVersion = romVersion .. string.char(romVersionBytes[i])
-end
-
-if romVersion == validRomVersion then
-    validVersion = true
-end
-
--- Attempts data
-local attemptsFile = "ironmario_tracker/attempts.txt"
-local attemptDataCsv = "ironmario_tracker/attempts_data.csv"
-local pbFile = "ironmario_tracker/pb_stars.txt"
-local songFile = "ironmario_tracker/song_info.txt"
-local warpLogFile = "ironmario_tracker/warp_log.json"
-
-local function fileExists(path)
-    local file = io.open(path, "r")
-    if file then
-        file:close()
-        return true
-    else
-        return false
-    end
-end
-
-local function copyFile(source, destination)
-    local srcFile = io.open(source, "r")
-    if not srcFile then
-        console.write("Source file not found: " .. source .. "\n")
-        return
-    end
-    local content = srcFile:read("*a")
-    srcFile:close()
-    local dstFile = io.open(destination, "w")
-    if dstFile then
-        dstFile:write(content)
-        dstFile:close()
-        console.write("Migrated file: " .. destination .. "\n")
-    else
-        console.write("Failed to create file: " .. destination .. "\n")
-    end
-end
-
--- List of file names to migrate
-local filesToMigrate = {"attempts.txt", "attempts_data.csv", "pb_stars.txt", "song_info.txt", "warp_log.json"}
-
-local oldDir = "sm64_rando_tracker/"
-local newDir = "ironmario_tracker/"
-
-for _, filename in ipairs(filesToMigrate) do
-    local newPath = newDir .. filename
-    -- Only migrate if the file does not already exist in the new directory.
-    if not fileExists(newPath) then
-        local oldPath = oldDir .. filename
-        if fileExists(oldPath) then
-            console.write("Migrating file: " .. filename .. "\n")
-            copyFile(oldPath, newPath)
-        end
-    end
-end
-
-local pbStars = 0
-local attemptCount = 0
-local currentSeedKey = ""
-local inMenu = false -- To detect transition from Menu to Level 16
-local warpLogReset = false -- New flag to prevent multiple resets
-local shouldSaveAttempt = false
-local reason = ""
-
-local addressMario = 0x19ca70 -- gMarioStates
-local addressHud = 0x19ca60 -- gHudDisplay
-local addressCurrLevelNum = 0x18e0e8 -- gCurrLevelNum
-local addressRandomizerGameSeed = 0x1ca6ac -- gRandomizerGameSeed
-local addressMarioGeometry = 0x19bccc -- sMarioGeometry
-local addressDelayedWarpOp = 0x19ca4c -- sDelayedWarpOp
-local addressCurrIntendedLevel = 0x19b7fc -- gCurrentIntendedLevel
-local addressCurrentMusic = 0x1928ae -- sCurrentMusic
-
-local addressMarioInput = addressMario + 0x2
-local addressMarioFlags = addressMario + 0x4
-local addressMarioAction = addressMario + 0xC
-local addressMarioPos = addressMario + 0x3C
-local addressMarioHurtCounter = addressMario + 0xB2
-local addressHudCoins = addressHud + 0x2
-local addressHudStars = addressHud + 0x4
-local addressHudHealthWedges = addressHud + 0x6
-local addressMarioGeometryCurrFloorType = addressMarioGeometry + 0x8
-
-local hp = 8
-local coins
-local stars
-local level = 1
-local area
-local run_end = false
-local run_start = false
-local logged_run = false
-local damage_was_taken = false
-local mario_action
-local music_name = "Super Mario 64 - Title Screen"
-local previous_music
-
-local previous_hp = 8
-local previous_level = 1
-local previous_seed = 0
-local previous_intended_level = 1
-local leave_water_hp
-local elapsedTime = 0
-local frameCounter = 0 -- Initialize the frame counter
-
-local displayData = {
-    attemptCount = 0,
-    elapsedTime = 0,
-    stars = 0,
-    levelAbbr = "Unknown",
-    levelId = 0,
-    seed = 0,
-    marioAction = 0,
-    pbStars = 0,
-    logged_run = false,
-    marioInWater = false,
-    marioPos,
-    music = 14,
-    warpLog = {}
+-- Main configuration table that holds version info, file paths, memory addresses, and user data.
+local CONFIG = {
+    TRACKER_VERSION = '1.0.2.4',
+    COMPATIBLE_ROM_VERSION = 'v1.0.2',
+    FONT_FACE = 'Lucida Console',
+    SHOW_SONG_TITLE = false, -- Flag to toggle song title display on the UI.
+    FILES = {
+        ATTEMPT_COUNT = 'usr/attempts.txt', -- File to record total attempt count.
+        ATTEMPT_DATA = 'usr/attempts_data.csv', -- CSV file for detailed run attempt data.
+        PB_COUNT = 'usr/pb_stars.txt', -- File for storing the personal best (PB) star count.
+        SONG_INFO = 'usr/song_info.txt', -- File for storing song info. (Location, Title)
+        WARP_LOG = 'usr/warp_log.json' -- File to log warp map data as JSON.
+    },
+    MEM = {
+        MARIO_BASE = 0x19ca70, -- Base memory address for Mario-related data.
+        HUD_BASE = 0x19ca60, -- Base memory address for HUD elements.
+        CURRENT_LEVEL_ID = 0x18e0e8, -- Address for the current level ID.
+        CURRENT_SEED = 0x1ca6ac, -- Address for the current run's seed.
+        DELAYED_WARP_OP = 0x19ca4c, -- Address for delayed warp operation code.
+        INTENDED_LEVEL_ID = 0x19b7fc, -- Address for the intended level after a warp.
+        CURRENT_SONG_ID = 0x1928ae -- Address for the current song ID.
+    },
+    USER = {
+        ATTEMPTS = 0, -- Total number of attempts (will be updated from file).
+        PB_STARS = 0 -- Personal best star count (will be updated from file).
+    }
 }
 
--- Tracks stars collected per level
-local starTracker = {}
-
-starCountLines = 1
-
-local mario_water_damage = {805446341, 805319364, 805446371, 805446344}
-local mario_fell_out_of_course = {6440, 6441, 6442}
-
-local levels_with_no_water = {9, 24, 4, 22, 8, 14, 15, 27, 31, 29, 18, 17, 30, 19}
-
-local showMusic = false
-local musicTogglePressed = false
-
--- Function to check if a level is in the list
-function LevelHasWater(level)
-    for _, v in ipairs(levels_with_no_water) do
-        if v == level then
-            return false -- Found the level
-        end
-    end
-    return true -- Level not found
-end
-
--- see console for other memory domains
-memory.usememorydomain("RDRAM")
-
-----------------------------------
----------- Mapping Data ----------
-----------------------------------
-
-LocationMap = {
-    [9] = {"Bob-Omb Battlefield", "BoB"},
-    [24] = {"Whomp's Fortress", "WF"},
-    [12] = {"Jolly Roger Bay", "JRB"},
-    [5] = {"Cool Cool Mountain", "CCM"},
-    [4] = {"Big Boo's Haunt", "BBH"},
-    [7] = {"Hazy Maze Cave", "HMC"},
-    [22] = {"Lethal Lava Land", "LLL"},
-    [8] = {"Shifting Sand Land", "SSL"},
-    [23] = {"Dire Dire Docks", "DDD"},
-    [10] = {"Snowman's Land", "SL"},
-    [11] = {"Wet Dry World", "WDW"},
-    [36] = {"Tall Tall Mountain", "TTM"},
-    [13] = {"Tiny Huge Island", "THI"},
-    [14] = {"Tick Tock Clock", "TTC"},
-    [15] = {"Rainbow Ride", "RR"},
-    [27] = {"Peach's Slide", "PSS"},
-    [20] = {"Secret Aquarium", "SA"},
-    [31] = {"Wing Mario Over the Rainbow", "WMotR"},
-    [29] = {"Tower of the Wing Cap", "Wing"},
-    [28] = {"Cavern of the Metal Cap", "Metal"},
-    [18] = {"Vanish Cap Under the Moat", "Vanish"},
-    [17] = {"Bowser in the Dark World", "BitDW"},
-    [30] = {"Bowser Fight 1", "Bowser1"},
-    [19] = {"Bowser in the Fire Sea", "BitFS"},
-    [3626007] = {"Bowser in the Sky", "BitS"},
-    [3626007] = {"Basement", "B1F"},
-    [6] = {"Castle", "Castle"},
-    [3626007] = {"Second Floor", "2F"},
-    [3626007] = {"Third Floor", "3F"},
-    [16] = {"Outside Castle", "Outside"},
-    [26] = {"Garden", "Garden"}, -- 26 to 6 is no warp, 26 to anything else is warp
-    [1] = {"Menu", "Menu"}
+-- Additional memory addresses for Mario-specific data derived from MARIO_BASE.
+CONFIG.MEM.MARIO = {
+    INPUT = CONFIG.MEM.MARIO_BASE + 0x2, -- Address for Mario's input flags or status.
+    ACTION = CONFIG.MEM.MARIO_BASE + 0xC, -- Address for Mario's current action/state.
+    POS = CONFIG.MEM.MARIO_BASE + 0x3C, -- Address for Mario's 3D position (stored as floats).
+    HURT_COUNTER = CONFIG.MEM.MARIO_BASE + 0xB2 -- Address for a counter indicating recent damage.
 }
 
--- Function to get song name by number
-function getSongName(number)
-    local songs = {
+-- Memory addresses for HUD-related data.
+CONFIG.MEM.HUD = {
+    STARS = CONFIG.MEM.HUD_BASE + 0x4, -- Address for the number of stars displayed.
+    HEALTH = CONFIG.MEM.HUD_BASE + 0x6 -- Address for Mario's health.
+}
+
+-- Level data configuration including level names and abbreviations.
+-- Note: There are duplicate keys (e.g., several entries for key 3626007); only the last assignment will persist.
+CONFIG.LEVEL_DATA = {
+    HAS_NO_WATER = {9, 24, 4, 22, 8, 14, 15, 27, 31, 29, 18, 17, 30, 19}, -- Currently unused.
+    LOCATION_MAP = {
+        [0] = {"", ""},
+        [1] = {"Menu", "Menu"},
+        [10] = {"Snowman's Land", "SL"},
+        [11] = {"Wet Dry World", "WDW"},
+        [12] = {"Jolly Roger Bay", "JRB"},
+        [13] = {"Tiny Huge Island", "THI"},
+        [14] = {"Tick Tock Clock", "TTC"},
+        [15] = {"Rainbow Ride", "RR"},
+        [16] = {"Outside Castle", "Outside"},
+        [17] = {"Bowser in the Dark World", "BitDW"},
+        [18] = {"Vanish Cap Under the Moat", "Vanish"},
+        [19] = {"Bowser in the Fire Sea", "BitFS"},
+        [20] = {"Secret Aquarium", "SA"},
+        [22] = {"Lethal Lava Land", "LLL"},
+        [23] = {"Dire Dire Docks", "DDD"},
+        [24] = {"Whomp's Fortress", "WF"},
+        [26] = {"Garden", "Garden"},
+        [27] = {"Peach's Slide", "PSS"},
+        [28] = {"Cavern of the Metal Cap", "Metal"},
+        [29] = {"Tower of the Wing Cap", "Wing"},
+        [30] = {"Bowser Fight 1", "Bowser1"},
+        [31] = {"Wing Mario Over the Rainbow", "WMotR"},
+        [36] = {"Tall Tall Mountain", "TTM"},
+        -- Duplicate keys: Only the last assignment for key 3626007 will be used.
+        -- [3626007] = {"Basement", "B1F"},
+        -- [3626007] = {"Second Floor", "2F"},
+        -- [3626007] = {"Third Floor", "3F"},
+        [3626007] = {"Bowser in the Sky", "BitS"},
+        [4] = {"Big Boo's Haunt", "BBH"},
+        [5] = {"Cool Cool Mountain", "CCM"},
+        [6] = {"Castle", "Castle"},
+        [7] = {"Hazy Maze Cave", "HMC"},
+        [8] = {"Shifting Sand Land", "SSL"},
+        [9] = {"Bob-Omb Battlefield", "BoB"}
+    }
+}
+
+-- Music data mapping song IDs to a pair: game title and track name.
+CONFIG.MUSIC_DATA = {
+    SONG_MAP = {
         -- [0] = { "nothing", "nothing" },
         -- [1] = { "Super Mario 64", "Collect a Star" },
         -- [2] = { "Super Mario 64", "Course Select" },
@@ -268,7 +143,7 @@ function getSongName(number)
         [48] = {"EarthBound", "Home Sweet Home"},
         [49] = {"EarthBound", "Onett Theme"},
         [50] = {"The Legend of Zelda: Ocarina of Time", "Gerudo Valley"},
-        [51] = {"Pokémon Shuffle", "Stage (Hard)"},
+        [51] = {"Super Mario 64", "Hard Puzzle"},
         [52] = {"Super Mario 64", "Inside Castle Walls (Remix)"},
         [53] = {"Kirby: Nightmare in Dream Land", "Butter Building"},
         [54] = {"Kirby 64: The_Crystal Shards", "Shiver Star"},
@@ -290,8 +165,8 @@ function getSongName(number)
         [70] = {"Pilotwings", "Light Plane"},
         [71] = {"Pokémon Diamond & Pearl", "Eterna Forest"},
         [72] = {"Pokémon HeartGold & SoulSilver", "Lavender Town"},
-        [73] = {"Mario Party", "Mario's Rainbow Castle"},
-        [74] = {"Bomberman 64", "Red Mountain"},
+        [73] = {"Super Mario 64", "Rainbow Castle"},
+        [74] = {"Sonic Adventure", "Red Mountain"},
         [75] = {"Deltarune", "Rude Buster"},
         [76] = {"Super Mario 3D World", "Overworld"},
         [77] = {"Super Mario Sunshine", "No-Pack/Puzzle Level"},
@@ -357,7 +232,7 @@ function getSongName(number)
         [137] = {"Donkey Kong 64", "Fungi Forest"},
         [138] = {"Paper Mario: The Thousand-Year Door", "Palace of Shadow"},
         [139] = {"Paper Mario: The Thousand-Year Door", "Rogueport Sewers"},
-        [140] = {"Super Mario Sunshine", "Secret Course"},
+        [140] = {"Super Mario Galaxy 2", "Honeybloom Galaxy"},
         [141] = {"Pokémon Mystery Dungeon", "Sky Tower"},
         [142] = {"Super Mario Bros. 3", "Overworld"},
         [143] = {"Super Mario RPG", "Mario's Pad"},
@@ -372,563 +247,418 @@ function getSongName(number)
         [152] = {"Mario Kart 64", "Bowser's Castle"},
         [153] = {"Mario Kart 64", "Rainbow Road"}
     }
-
-    local entry = songs[number]
-    if entry then
-        return entry[1] .. " - " .. entry[2]
-    else
-        return ''
-    end
-end
-
-WarpLocations = {
-    ["BoB"] = {166, 167, 168, 211, 212}, -- Bob-Omb Battlefield (BoB)
-    ["WF"] = {172, 173, 174, 217, 218}, -- Whomp's Fortress (WF)
-    ["JRB"] = {175, 176, 177, 221}, -- Jolly Roger Bay (JRB)
-    ["CCM"] = {169, 170, 171, 215}, -- Cool Cool Mountain (CCM)
-    ["BBH"] = {999}, -- Big Boo's Haunt (BBH)   -- 26 to 6 is no warp, 26 to anything else is warp
-    ["HMC"] = {11111}, -- Hazy Maze Cave (HMC)
-    ["LLL"] = {178, 179, 180, 224}, -- Lethal Lava Land (LLL)
-    ["SSL"] = {181, 182, 183, 227}, -- Shifting Sand Land (SSL) 
-    ["DDD"] = {232, 233, 234}, -- Dire Dire Docks (DDD)
-    ["SL"] = {247, 248, 249}, -- Snowman's Land (SL)
-    ["WDW"] = {190, 191, 192, 236}, -- Wet Dry World (WDW)
-    ["TTM"] = {196, 197, 198, 242}, -- Tall Tall Mountain (TTM)
-    ["THI"] = {193, 194, 195, 205, 206, 207}, -- Tiny Huge Island (THI)
-    ["TTC"] = {244, 245, 246}, -- Tick Tock Clock (TTC)
-    ["RR"] = {253}, -- Rainbow Ride (RR)
-    ["PSS"] = {10878976}, -- Princess's Secret Slide (PSS)
-    ["Aquarium"] = {10944512}, -- Secret Aquarium (Aquarium)
-    ["WMotR"] = {11010048}, -- Wing Mario Over the Rainbow (WMotR)
-    ["Wing"] = {21}, -- Tower of the Wing Cap (Wing)
-    ["Metal"] = {10944512}, -- Cavern of the Metal Cap (Metal)
-    ["Vanish"] = {11010048}, -- Vanish Cap Under the Moat (Vanish)
-    ["BitDW"] = {10878976}, -- Bowser in the Dark World (BitDW)
-    ["Bowser1"] = {10944512}, -- Bowser Fight 1 (Bowser1)
-    ["BitFS"] = {11010048}, -- Bowser in the Fire Sea (BitFS)
-    ["BitS"] = {10878976}, -- Bowser in the Sky (BitS)
-    ["B1F"] = {10944512}, -- Basement (B1F)
-    ["1F"] = {11010048}, -- First Floor (1F)
-    ["2F"] = {10878976}, -- Second Floor (2F)
-    ["3F"] = {10944512}, -- Third Floor (3F)
-    ["Outside"] = {11010048}, -- Outside Castle (Outside)
-    ["Menu"] = {10878976} -- Menu (Menu)
 }
 
--- List of warp points without level grouping
-warpCoords = {{
-    pos = {
-        [0] = 1972,
-        [1] = 819,
-        [2] = 1197
-    },
-    threshold = 80,
-    label = "SA"
-}, -- Secret Aquarium
-{
-    pos = {
-        [0] = -5328,
-        [1] = 512,
-        [2] = -4146
-    },
-    threshold = 400,
-    label = "BitDW"
-}, -- Bowser 1
-{
-    pos = {
-        [0] = 1974,
-        [1] = 768,
-        [2] = -2082
-    },
-    threshold = 80,
-    label = "PSS"
-}, -- Princess Slide
-{
-    pos = {
-        [0] = -3440,
-        [1] = 2950,
-        [2] = 5999
-    },
-    threshold = 150,
-    label = "RR"
-}, -- Rainbow Road  WMotR
-{
-    pos = {
-        [0] = 3030,
-        [1] = 2816,
-        [2] = 5924
-    },
-    threshold = 150,
-    label = "WMotR"
-}, -- WMotR
-{
-    pos = {
-        [0] = 3306,
-        [1] = -4689,
-        [2] = 4795
-    },
-    threshold = 150,
-    label = "Metal"
-}, -- Metal
-{
-    pos = {
-        [0] = -3323,
-        [1] = -818,
-        [2] = -2004
-    },
-    threshold = 150,
-    label = "Vanish"
-} -- Vanish
+-- Define possible run states.
+local run_state = {
+    INACTIVE = 0, -- Run has not started.
+    ACTIVE = 1, -- Run is in progress.
+    PENDING = 2, -- Run has ended; data pending write.
+    COMPLETE = 3 -- Run data has been fully processed.
 }
 
--- table of terrain names
-local terrain_table = {}
-terrain_table[0x00] = "normal"
-terrain_table[0x01] = "lethal_lava"
-terrain_table[0x05] = "hang"
-terrain_table[0x0A] = "deathfloor"
-terrain_table[0x0E] = "water_currents"
-terrain_table[0x12] = "void"
-terrain_table[0x13] = "very_slippery"
-terrain_table[0x14] = "slippery"
-terrain_table[0x15] = "climbable"
-terrain_table[0x28] = "wall"
-terrain_table[0x29] = "grass"
-terrain_table[0x2A] = "unclimbable"
-terrain_table[0x2C] = "windy"
-terrain_table[0x2E] = "icy"
-terrain_table[0x30] = "flat"
-terrain_table[0x36] = "snowy"
-terrain_table[0x37] = "snowy2"
-terrain_table[0x76] = "fence"
-terrain_table[0x7B] = "vanishing_wall"
-terrain_table[0xFD] = "pool_warp"
+-- Main state table that stores runtime data for input, Mario, run metrics, and game info.
+local state = {
+    input = {
+        music_toggle_pressed = false -- Flag to track toggling of song title display.
+    },
+    mario = {}, -- Will hold Mario's position, velocity, health, etc.
+    run = {
+        status = run_state.INACTIVE, -- Current run state.
+        stars = 0, -- Total stars collected during the run.
+        warp_map = {}, -- Map of intended warp destinations to actual warp outcomes.
+        star_map = {}, -- Mapping of levels to star counts collected.
+        start_time = os.time(), -- Timestamp for when the run started.
+        last_updated_time = os.time(), -- Last time the state was updated.
+        end_time = os.time() -- Timestamp for when the run ended (initially same as start).
+    },
+    game = {
+        level_id = 1 -- Current level ID; default value.
+    }
+}
 
--- Function to check if the CSV file exists and write headers if it doesn't
-local function initializeCSV()
-    local file = io.open(attemptDataCsv, "r")
-    if not file then
-        file = io.open(attemptDataCsv, "w")
-        file:write("SeedKey,AttemptNumber,TimeStamp,Stars,Level,TimeTaken,StarsCollected\n")
-        file:close()
-    else
-        file:close()
-    end
+-- Table to store the previous state (for change detection in UI rendering).
+local last_state = {}
+
+-- Function to read and return the ROM version from a specific memory address.
+local function get_rom_version()
+    memory.usememorydomain("ROM") -- Switch memory domain to ROM.
+    local rom_version_bytes = memory.read_bytes_as_array(0x2A, 6) -- Read 6 bytes from ROM.
+    local rom_version = string.char(table.unpack(rom_version_bytes)) -- Convert byte array to string.
+    return rom_version
 end
 
--- Extended function to save attempts with more details in CSV format and update attempt count
-local function saveAttempt(attemptDataCsv, attemptsFile, seed, attemptNumber, stars, levelAbbr, timeTaken, starTracker)
-    initializeCSV() -- Ensure CSV file has headers
+-- Save the ROM version to the CONFIG table.
+CONFIG.RUNNING_ROM_VERSION = get_rom_version()
 
-    -- Generate Seed Key
-    local seedKey = string.format("%s_%s", seed, os.date("%y%m%d%H%M%S"))
-
-    -- Format the star tracker data as a consolidated string
-    local starData = ""
-    for levelAbbr, starCount in pairs(starTracker) do
-        starData = starData .. string.format("%s:%d ", levelAbbr, starCount)
-    end
-    starData = starData:match("^%s*(.-)%s*$") -- Trim leading/trailing spaces
-
-    -- Append detailed attempt data to attemptDataCsv (CSV)
-    local file = io.open(attemptDataCsv, "a") -- Append mode
+-- Initialize the attempt data file if it doesn't exist by writing a CSV header.
+local function init_attempt_data_file()
+    local file = io.open(CONFIG.FILES.ATTEMPT_DATA, "r")
     if file then
-        -- Use the provided timeStamp or generate a new one if nil
-        local timeStamp = os.date("%Y-%m-%d %H:%M:%S")
-
-        -- Format and write CSV line
-        file:write(string.format("%s,%d,%s,%d,%s,%s,%s\n", seedKey, attemptNumber, timeStamp, stars, levelAbbr,
-            timeTaken, starData))
-        file:close()
-    else
-        print("Failed to save attempt details!")
-    end
-
-    -- Overwrite attemptsFile with the latest attemptNumber
-    local countFile = io.open(attemptsFile, "w") -- Write mode (overwrites content)
-    if countFile then
-        countFile:write(tostring(attemptNumber))
-        countFile:close()
-    else
-        print("Failed to update attempt count!")
-    end
-end
-
--- Function to read the attempt number from the file
-local function readAttemptNumber()
-    local file = io.open(attemptsFile, "r") -- Open file in read mode
-    if file then
-        local content = file:read("*l") -- Read the first line
-        file:close()
-
-        local attemptNumber = tonumber(content) -- Convert to number
-        if attemptNumber then
-            return attemptNumber -- Return the number if valid
-        else
-            print("Error: File does not contain a valid number.")
-            return 0 -- Default to 0 if invalid
-        end
-    else
-        print("Error: File not found.")
-        return 0 -- Default to 0 if file doesn't exist
-    end
-end
-
--- Get the current Attempt Count
-attemptCount = readAttemptNumber()
-attemptCount = attemptCount + 1
-
-local runStartTime = nil -- Stores the start time of the current run
-
--- Function to start the timer when the run begins
-function startRunTimer(level)
-    if level == 16 and runStartTime == nil then
-        runStartTime = os.time() -- Record the start time
-        run_start = true
-        console.write("Run timer started.\n")
-    elseif level == 1 then
-        runStartTime = nil -- Reset the timer when returning to the menu
-    end
-end
-
--- Function to format elapsed time as HH:MM:SS
-function formatElapsedTime(seconds)
-    local hours = math.floor(seconds / 3600)
-    local minutes = math.floor((seconds % 3600) / 60)
-    local secs = seconds % 60
-    return string.format("%02d:%02d:%02d", hours, minutes, secs)
-end
-
--- Check if PB file exists and load it, otherwise initialize to 0
-
--- Function to read PB from file with debug output
-local function loadPB()
-    local file = io.open(pbFile, "r")
-    if file then
-        pbStars = tonumber(file:read("*line")) or 0
-        file:close()
-    end
-
-    -- Sanitize PB value to ensure it doesn't exceed 120
-    if pbStars > 120 then
-        pbStars = 120 -- Set to max allowed stars
-    elseif pbStars < 0 then
-        pbStars = 1 -- Set to reasonable starting value
-    end
-
-    -- Debug output
-    console.write("Loaded PB Stars: " .. pbStars .. "\n")
-end
-
--- Save PB value to file with sanitation
-function savePB(stars)
-    -- Ignore any PB updates if the stars value exceeds 120
-    if stars > 120 then
-        console.write("PB Stars not saved: value is greater than 120\n")
+        file:close() -- File exists, so do nothing.
         return
     end
 
-    -- Save the PB only if it's valid and less than 120
-    local file = io.open(pbFile, "w")
+    file = io.open(CONFIG.FILES.ATTEMPT_DATA, "w")
     if file then
-        file:write(tostring(stars))
-        file:close()
-    end
-
-    -- Debug output
-    console.write("Saved PB Stars: " .. stars .. "\n")
-end
-
--- Save Music to text file
-function saveMusic(music_name)
-    local file = io.open(songFile, "w")
-    if file then
-        file:write(tostring(music_name))
+        file:write("AttemptNumber,SeedKey,TimeStamp,Stars,TimeTaken,EndLevel,EndCause,StarsCollected\n")
         file:close()
     end
 end
 
--- Call loadPB at the beginning of the script to initialize pbStars
-loadPB()
+init_attempt_data_file() -- Call the initialization function.
 
--- terrain type to string description
-function terrain2str(terrain)
-    if (0x1B <= terrain and terrain <= 0x1E) then
-        return string.format("switch%02X", terrain)
-    elseif (0xA6 <= terrain and terrain <= 0xCF) then
-        return string.format("paintingf%02X", terrain)
-    elseif (0xD3 <= terrain and terrain <= 0xF8) then
-        return string.format("paintingb%02X", terrain)
-    elseif terrain_table[terrain] ~= nil then
-        return terrain_table[terrain]
+-- Read the attempt count from file; if file is missing or empty, default to 0.
+local function read_attempts_file()
+    local file = io.open(CONFIG.FILES.ATTEMPT_COUNT, "r")
+    if file then
+        CONFIG.USER.ATTEMPTS = tonumber(file:read("*all"))
+        file:close()
     else
-        return "unknown"
+        CONFIG.USER.ATTEMPTS = 0
     end
 end
 
--- print float triple from memory
-function read3float(base)
-    arr = {}
-    for i = 0, 2 do
-        arr[i] = memory.readfloat(base + 4 * i, true)
+-- Read the personal best stars count from file.
+local function read_pb_stars_file()
+    local file = io.open(CONFIG.FILES.PB_COUNT, "r")
+    if file then
+        CONFIG.USER.PB_STARS = tonumber(file:read("*all"))
+        file:close()
+    else
+        CONFIG.USER.PB_STARS = 0
+    end
+end
+
+-- Write the current attempt count to its file.
+local function write_attempts_file()
+    local file = io.open(CONFIG.FILES.ATTEMPT_COUNT, "w")
+    if file then
+        file:write(CONFIG.USER.ATTEMPTS)
+        file:close()
+    end
+end
+
+-- Write the personal best stars count to file.
+local function write_pb_stars_file()
+    local file = io.open(CONFIG.FILES.PB_COUNT, "w")
+    if file then
+        file:write(CONFIG.USER.PB_STARS)
+        file:close()
+    end
+end
+
+-- Retrieve the full song name based on the song ID.
+local function get_song_name(song_id)
+    local song_info = CONFIG.MUSIC_DATA.SONG_MAP[song_id]
+    if song_info then
+        return song_info[1] .. " - " .. song_info[2]
+    end
+    return "Unknown"
+end
+
+-- Utility function to read three consecutive floats from a given memory address.
+local function read3float(base)
+    local arr = {}
+    for i = 1, 3 do
+        arr[i] = memory.readfloat(base + 4 * (i - 1), true)
     end
     return arr
 end
 
--- print float triple
-function print3float(x, y, name, pos)
-    if pos then
-        gui.text(x, y, string.format("%s %5.1f, %5.1f, %5.1f", name, pos[0], pos[1], pos[2]))
+-- Get the full level name based on the level ID using LOCATION_MAP.
+local function get_level_name(level_id)
+    if CONFIG.LEVEL_DATA.LOCATION_MAP[level_id] then
+        return CONFIG.LEVEL_DATA.LOCATION_MAP[level_id][1]
     else
-        gui.text(x, y, name .. ": Invalid Position Data")
+        return "Unknown"
     end
 end
 
--- Function to check if terrain corresponds to a warp location
-function checkTerrainForWarp(terrain)
-    -- Loop through all levels in WarpLocations
-    for level, warps in pairs(WarpLocations) do
-        -- Check if the terrain matches any of the warp locations
-        for _, warp in ipairs(warps) do
-            if terrain == warp then
-                return level -- Return the level abbreviation
+-- Get the abbreviated level name based on the level ID.
+local function get_level_abbr(level_id)
+    if CONFIG.LEVEL_DATA.LOCATION_MAP[level_id] then
+        return CONFIG.LEVEL_DATA.LOCATION_MAP[level_id][2]
+    else
+        return "Unknown"
+    end
+end
+
+-- Update the game state by reading from memory and updating our state tables.
+local function update_game_state()
+    last_state = tablex.deepcopy(state) -- Store the previous state for later comparison.
+
+    state.last_updated_time = os.time() -- Update the timestamp.
+    state.game.delayed_warp_op = memory.read_u16_be(CONFIG.MEM.DELAYED_WARP_OP)
+    state.game.intended_level_id = memory.read_u32_be(CONFIG.MEM.INTENDED_LEVEL_ID)
+    state.game.level_id = memory.read_u16_be(CONFIG.MEM.CURRENT_LEVEL_ID)
+    state.game.song = memory.read_u16_be(CONFIG.MEM.CURRENT_SONG_ID)
+    state.mario.action = memory.read_u32_be(CONFIG.MEM.MARIO.ACTION)
+    state.mario.flags = memory.read_u32_be(CONFIG.MEM.MARIO.INPUT) -- Read flags from the same address.
+    state.mario.hp = memory.read_u16_be(CONFIG.MEM.HUD.HEALTH)
+    state.mario.input = memory.read_u16_be(CONFIG.MEM.MARIO.INPUT) -- Duplicate read; ensure the correct width.
+    state.run.seed = memory.read_u32_be(CONFIG.MEM.CURRENT_SEED)
+    state.run.stars = memory.read_u16_be(CONFIG.MEM.HUD.STARS)
+
+    -- Read Mario's 3D position from memory.
+    local pos_data = read3float(CONFIG.MEM.MARIO.POS)
+    state.mario.pos = {
+        x = pos_data[1],
+        y = pos_data[2],
+        z = pos_data[3]
+    }
+
+    -- Calculate Mario's velocity based on change in position from the previous state.
+    if last_state.mario.pos then
+        state.mario.velocity = {
+            x = state.mario.pos.x - last_state.mario.pos.x,
+            y = state.mario.pos.y - last_state.mario.pos.y,
+            z = state.mario.pos.z - last_state.mario.pos.z
+        }
+    else
+        state.mario.velocity = {
+            x = 0,
+            y = 0,
+            z = 0
+        }
+    end
+
+    -- Determine Mario's status (e.g., in water, taking gas damage, intangible).
+    state.mario.is_in_water = ((state.mario.action & 0xC0) == 0xC0)
+    state.mario.is_in_gas = ((state.mario.input & 0x100) == 0x100)
+    state.mario.is_intangible = ((state.mario.action & 0x1000) == 0x1000)
+    state.mario.has_metal_cap = ((state.mario.flags & 0x4) == 0x4)
+    state.mario.is_taking_gas_damage = (state.mario.is_in_gas and not state.mario.is_intangible and
+                                           not state.mario.has_metal_cap)
+
+    -- Read the hurt counter to detect if Mario has taken damage.
+    state.mario.hurt_counter = memory.readbyte(CONFIG.MEM.MARIO.HURT_COUNTER)
+
+    -- Retrieve abbreviated level names for current and intended levels.
+    local level_abbr = get_level_abbr(state.game.level_id)
+    local intended_level_abbr = get_level_abbr(state.game.intended_level_id)
+
+    -- Update the warp map if not already set, provided that the intended level is valid
+    -- and the current level is not one of the excluded ones (levels 6 and 16).
+    if not state.run.warp_map[intended_level_abbr] and state.game.intended_level_id ~= 0 and state.game.level_id ~= 6 and
+        state.game.level_id ~= 16 then
+        state.run.warp_map[intended_level_abbr] = level_abbr
+    end
+
+    -- If stars have increased since the last state update, record the star collection per level.
+    if state.run.stars > last_state.run.stars then
+        if not state.run.star_map[level_abbr] then
+            state.run.star_map[level_abbr] = 0
+        end
+        state.run.star_map[level_abbr] = state.run.star_map[level_abbr] + 1
+    end
+
+    -- If the level indicates a new run (level_id 16) and the run is not already active, initialize a new run.
+    if state.game.level_id == 16 and state.run.status ~= run_state.ACTIVE then
+        state.run.status = run_state.ACTIVE
+        state.run.end_reason = nil
+        state.run.pb = false
+        state.run.start_time = os.time() -- Reset the start time.
+        state.run.warp_map = {} -- Clear previous warp data.
+        state.run.star_map = {} -- Clear previous star data.
+        CONFIG.USER.ATTEMPTS = CONFIG.USER.ATTEMPTS + 1 -- Increment the attempt count.
+    end
+end
+
+-- Check for run-ending conditions (e.g., Mario dying, falling, environmental hazards).
+local function check_run_over_conditions()
+    if state.mario.hp == 0 then
+        if last_state.mario.velocity.y <= -55 then
+            state.run.end_reason = 'Fall Damage'
+        elseif state.mario.hurt_counter > 0 then
+            state.run.end_reason = 'Enemy Damage'
+        elseif state.mario.is_taking_gas_damage then
+            state.run.end_reason = 'Suffocated by Hazy Gas'
+        elseif state.mario.is_in_water then
+            if state.game.level_id == 10 then
+                state.run.end_reason = 'Frozen in Cold Water'
+            elseif last_state.mario.hp == 1 then
+                state.run.end_reason = 'Drowned'
+            else
+                state.run.end_reason = "HOW?" -- Fallback for an unhandled case.
             end
+        else
+            state.run.end_reason = 'Environment Hazard'
+        end
+    elseif state.game.delayed_warp_op == 18 or state.game.delayed_warp_op == 20 then
+        state.run.end_reason = 'Fell Out of Level'
+    else
+        state.run.end_reason = "HOW?" -- Generic fallback reason.
+    end
+
+    -- If an end reason is determined, mark the run as pending and record the end time.
+    if state.run.end_reason then
+        state.run.end_time = os.time()
+        state.run.status = run_state.PENDING
+
+        -- Check if the current star count is a new personal best.
+        if CONFIG.USER.PB_STARS < state.run.stars then
+            CONFIG.USER.PB_STARS = state.run.stars
+            state.run.pb = true
         end
     end
-    return nil -- Return nil if no match is found
 end
 
--- colors for HP display
-local hp_colors = {"red", "red", "yellow", "yellow", "lightgreen", "lightgreen", "lightblue", "lightblue"}
+-- Format a duration (in seconds) as a string in HH:MM:SS format.
+local function format_time(seconds)
+    local hours = math.floor(seconds / 3600)
+    local minutes = math.floor((seconds % 3600) / 60)
+    local seconds = math.floor(seconds % 60)
+    return string.format("%02d:%02d:%02d", hours, minutes, seconds)
+end
 
--- Warp log storage
-local warp_log = {}
+-- Write detailed run data as a CSV line to the attempts data file.
+local function write_run_data_csv()
+    local seed_key = string.format("%s_%s", state.run.seed, os.date("%Y%m%d%H%M%S"))
+    local attempt_number = CONFIG.USER.ATTEMPTS
+    local timestamp = os.date("%Y-%m-%d %H:%M:%S", state.run.start_time)
+    local stars = state.run.stars or 0
+    local level_name = get_level_name(state.game.level_id)
+    local time_taken = state.run.end_time - state.run.start_time
 
--- Load the warp log from the file
-local function loadWarpLog()
-    local file = io.open(warpLogFile, "r")
+    -- Create a summary string for stars collected per level.
+    local stars_collected = ""
+    for abbr, count in pairs(state.run.star_map) do
+        stars_collected = stars_collected .. string.format("%s:%d ", abbr, count)
+    end
+    if stars_collected ~= "" then
+        stars_collected = stars_collected:sub(1, -2) -- Remove trailing space.
+    end
+
+    -- Format the CSV line with all relevant run data.
+    local csv_line = string.format("%d,%s,%s,%d,%s,%s,%s,%s\n", attempt_number, seed_key, timestamp, stars,
+        format_time(time_taken), level_name, state.run.end_reason, stars_collected)
+
+    -- Append the CSV line to the attempt data file.
+    local file = io.open(CONFIG.FILES.ATTEMPT_DATA, "a")
     if file then
-        local content = file:read("*a")
-        warp_log = content ~= "" and json.decode(content) or {}
+        file:write(csv_line)
         file:close()
-        console.write("Warp log loaded from file.\n")
-    else
-        console.write("No existing warp log found. Starting fresh.\n")
     end
 end
 
--- Save the warp log to the file in JSON format
-local function saveWarpLog()
-    local file = io.open(warpLogFile, "w")
+-- Write the warp map data as a JSON file.
+local function write_warp_log()
+    local file = io.open(CONFIG.FILES.WARP_LOG, "w")
     if file then
-        file:write(json.encode(warp_log)) -- Save as JSON
+        file:write(json.encode(state.run.warp_map))
         file:close()
-        console.write("Warp log saved in JSON format.\n")
-    else
-        console.write("Failed to save warp log!\n")
     end
 end
 
--- Track warp detection timing
-local nearWarpTimer = {}
-local wasNearWarp = {}
-
--- Check if Mario is near any warp point in warpCoords
-function checkProximityToWarpPoints(marioPos, warpCoords)
-    for _, warpPoint in ipairs(warpCoords) do
-        local dx = marioPos[0] - warpPoint.pos[0]
-        local dy = marioPos[1] - warpPoint.pos[1]
-        local dz = marioPos[2] - warpPoint.pos[2]
-        local distance_squared = dx * dx + dy * dy + dz * dz
-        if distance_squared <= warpPoint.threshold * warpPoint.threshold then
-            return warpPoint.label -- Return the label if Mario is near a warp point
-        end
-    end
-    return nil -- Not near any warp point
+-- Write all run-related data to files and mark the run as complete.
+local function write_data()
+    write_attempts_file() -- Write the attempt count.
+    write_pb_stars_file() -- Write the PB star count.
+    write_run_data_csv() -- Write detailed run data as CSV.
+    write_warp_log() -- Write the warp map as JSON.
+    state.run.status = run_state.COMPLETE
 end
 
--- Updated function to check and log transitions
-function checkAndLogWarpTransition(mario_pos, warpCoords, previous_level, current_level)
-    local warpLabel = checkProximityToWarpPoints(mario_pos, warpCoords)
+-- Render the on-screen UI overlay with current run and game data.
+local function render_ui()
+    local game_width = client.bufferwidth() -- Get current game screen width.
+    local game_height = client.bufferheight() -- Get current game screen height.
 
-    -- Start timer when Mario is near a warp point
-    if warpLabel then
-        if not wasNearWarp[warpLabel] then
-            nearWarpTimer[warpLabel] = os.time()
-            wasNearWarp[warpLabel] = true
-            -- console.write(string.format("Mario is near %s. Timer started.\n", warpLabel))
-        end
-    else
-        -- Reset if Mario moves away
-        for label, timer in pairs(nearWarpTimer) do
-            if os.time() - timer > 3 then -- 3-second timeout
-                wasNearWarp[label] = false
-                nearWarpTimer[label] = nil
-                -- console.write(string.format("Timer expired for %s.\n", label))
-            end
-        end
-    end
+    -- Calculate extra UI width based on aspect ratio and game width.
+    local ui_width = math.floor((game_height * (16 / 9)) - game_width) - 20
 
-    -- Log warp if level changes after proximity detection
-    if previous_level ~= current_level then
-        for label, wasNear in pairs(wasNearWarp) do
-            if wasNear then
-                logWarpTransition(label, current_level)
-                wasNearWarp[label] = false
-                nearWarpTimer[label] = nil
-            end
-        end
-    end
-end
+    -- Determine font size and character width based on game height.
+    local font_size = math.max(math.floor(game_height / 50), 8)
+    local char_width = math.floor(font_size / 1.6)
 
-function logLevel(currentLevel, intendedLevel)
-    local currentLevelAbbr = LocationMap[currentLevel] and LocationMap[currentLevel][2]
-    local intendedLevelAbbr = LocationMap[intendedLevel] and LocationMap[intendedLevel][2]
-    if intendedLevelAbbr ~= nil and currentLevelAbbr ~= nil and not warp_log[intendedLevelAbbr] then
-        warp_log[intendedLevelAbbr] = currentLevelAbbr
-        saveWarpLog()
-    end
-end
+    local icon_size = math.floor(game_height / 12) -- Define icon size for logos, stars, etc.
 
--- Log warp transitions and save
-function logWarpTransition(warpPoint, currentLevel)
-    if currentLevel ~= 6 and warpPoint then
-        local currentLevelAbbr = LocationMap[currentLevel] and LocationMap[currentLevel][2] or "Unknown"
-        if not warp_log[warpPoint] then
-            warp_log[warpPoint] = currentLevelAbbr
-            -- console.write(string.format("Warp from %s leads to %s\n", warpPoint, currentLevelAbbr))
-            saveWarpLog() -- Save whenever a new warp is logged
-        end
-    end
-end
+    -- Set extra padding for the game screen to accommodate the UI.
+    client.SetGameExtraPadding(0, 0, ui_width + 20, 0)
 
--- Reset warp log and clear the file
-function resetWarpLog(currentLevel)
-    if currentLevel == 1 and not warpLogReset then
-        warp_log = {}
-        starTracker = {} -- Reset the star tracker
-        saveWarpLog()
-        console.write("Warp log has been reset.\n")
-        warpLogReset = true -- Prevent further resets while in menu
-    elseif currentLevel ~= 1 then
-        warpLogReset = false -- Reset the flag when leaving the menu
-    end
-end
-
--- Load warp log at the start
-loadWarpLog()
-
-local function totalLoggedStars()
-    local total = 0
-    for _, count in pairs(starTracker) do
-        total = total + count
-    end
-    return total
-end
-
--- Function to check if mario_action matches any value in a list
-function isMarioActionInList(action, actionList)
-    for _, value in ipairs(actionList) do
-        if action == value then
-            return true -- Found a match
-        end
-    end
-    return false -- No match found
-end
-
-OR, XOR, AND = 1, 3, 4
-
-function bitoper(a, b, oper)
-    local r, m, s = 0, 2 ^ 31
-    repeat
-        s, a, b = a + b + m, a % m, b % m
-        r, m = r + m * oper % (s - a - b), m / 2
-    until m < 1
-    return r
-end
-
--- Function to render GUI elements
-function renderGui()
-    local gameWidth = client.bufferwidth()
-    local gameHeight = client.bufferheight()
-    local screenWidth = client.screenwidth()
-    local screenHeight = client.screenheight()
-
-    local padWidth = math.floor((gameHeight * (16 / 9)) - gameWidth)
-
-    local fontSize = math.max(math.floor(gameHeight / 50), 8)
-    local charWidth = math.floor(fontSize / 1.6)
-
-    local iconSize = math.floor(gameHeight / 12)
-
-    local musicName = getSongName(displayData.music)
-
-    gui.clearGraphics()
-
-    client.SetGameExtraPadding(0, 0, padWidth, 0)
-
-    gui.drawImage("ironmario_tracker/logo.png", (gameWidth + padWidth) - iconSize, 0, iconSize, iconSize)
-
-    gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize, "IronMario Tracker", "lightblue", nil, fontSize,
-        fontFace, nil, "center")
-
-    if not validVersion then
-        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 10, "Incompatible\nROM version!", "red", nil,
-            fontSize * 2, fontFace, nil, "center")
-        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 15, "Expected: " .. validRomVersion, "red", nil,
-            fontSize, fontFace, nil, "center")
-        gui.drawString(gameWidth + math.floor(padWidth / 2), fontSize * 16, "Running: " .. romVersion, "red", nil,
-            fontSize, fontFace, nil, "center")
+    -- Skip rendering if no changes in state (to save processing).
+    if tablex.deepcompare(state, last_state) then
         return
     end
 
-    gui.drawString(gameWidth, fontSize + (fontSize * 2), "Attempt #: " .. displayData.attemptCount, nil, nil, fontSize,
-        fontFace)
-    gui.drawString(gameWidth, fontSize + (fontSize * 3), "Run Time: " .. formatElapsedTime(displayData.elapsedTime),
-        nil, nil, fontSize, fontFace)
-    gui.drawString(gameWidth, fontSize + (fontSize * 4), "Stars: " .. displayData.stars, nil, nil, fontSize, fontFace)
-    gui.drawString(gameWidth, fontSize + (fontSize * 5), "Level: " .. displayData.levelAbbr, nil, nil, fontSize,
-        fontFace)
-    gui.drawString(gameWidth, fontSize + (fontSize * 6), "Seed: " .. displayData.seed, nil, nil, fontSize, fontFace)
+    -- Draw the tracker logo in the bottom right of the game screen.
+    gui.drawImage("img/logo.png", game_width, game_height - (icon_size + 20), icon_size, icon_size)
 
-    if displayData.logged_run and displayData.pbStars == displayData.stars then
-        gui.drawString(gameWidth, fontSize + (fontSize * 7), "RUN OVER - NEW PB!", "red", nil, fontSize, fontFace)
-    elseif displayData.logged_run then
-        gui.drawString(gameWidth, fontSize + (fontSize * 7), "RUN OVER", "red", nil, fontSize, fontFace)
+    -- Draw the tracker title centered in the UI panel.
+    gui.drawString(game_width + math.floor(ui_width / 2), font_size, "IronMario Tracker", "lightblue", nil, font_size,
+        CONFIG.FONT_FACE, nil, "center")
+
+    -- If the running ROM version does not match the compatible version, show an error message.
+    if CONFIG.RUNNING_ROM_VERSION ~= CONFIG.COMPATIBLE_ROM_VERSION then
+        gui.drawString(game_width + math.floor(ui_width / 2), font_size * 10, "Incompatible\nROM version!", "red", nil,
+            font_size * 2, CONFIG.FONT_FACE, nil, "center")
+        gui.drawString(game_width + math.floor(ui_width / 2), font_size * 15,
+            "Expected: " .. CONFIG.COMPATIBLE_ROM_VERSION, "red", nil, font_size, CONFIG.FONT_FACE, nil, "center")
+        gui.drawString(game_width + math.floor(ui_width / 2), font_size * 16, "Running: " .. CONFIG.RUNNING_ROM_VERSION,
+            "red", nil, font_size, CONFIG.FONT_FACE, nil, "center")
+        return -- Stop further UI rendering if ROM version is incompatible.
     end
 
-    gui.drawString(gameWidth, fontSize + (fontSize * 8), "PB Stars: " .. displayData.pbStars, "yellow", nil, fontSize,
-        fontFace)
+    -- Render attempt number.
+    gui.drawString(game_width, font_size * 3, "Attempt #" .. CONFIG.USER.ATTEMPTS, nil, nil, font_size, CONFIG.FONT_FACE)
 
-    -- Define the ordered list of keys to display
-    local orderedKeys = {"BoB", "WF", "JRB", "CCM", "BBH", "HMC", "LLL", "SSL", "DDD", "SL", "WDW", "TTM", "THI", "TTC",
-                         "RR", "PSS", "SA", "WMotR", "Wing", "Metal", "Vanish", "BitDW", "BitFS", "BitS"}
+    -- Render elapsed time depending on whether the run is still active.
+    if state.run.status == run_state.ACTIVE then
+        gui.drawString(game_width, font_size * 5, "Time: " .. format_time(os.time() - state.run.start_time), nil, nil,
+            font_size, CONFIG.FONT_FACE)
+    else
+        gui.drawString(game_width, font_size * 5, "Time: " .. format_time(state.run.end_time - state.run.start_time),
+            nil, nil, font_size, CONFIG.FONT_FACE)
+    end
 
-    -- Setup x positions for the two columns.
-    local leftColX = gameWidth
-    local rightColX = gameWidth + math.floor(padWidth / 2)
+    -- Render current star count and personal best (PB) stars.
+    gui.drawString(game_width, font_size * 4, "Stars: " .. state.run.stars, nil, nil, font_size, CONFIG.FONT_FACE)
+    gui.drawString(game_width + math.floor(ui_width / 3), font_size * 4, "PB: " .. CONFIG.USER.PB_STARS, "yellow", nil,
+        font_size, CONFIG.FONT_FACE)
 
-    -----------------------------
-    -- Warp Log Section Layout --
-    -----------------------------
-    local warpHeaderY = fontSize + (fontSize * 10)
-    gui.drawString(gameWidth + math.floor(padWidth / 2), warpHeaderY, "== Warp Map ==", "orange", nil, fontSize,
-        fontFace, nil, "center")
-    local warpTableStartY = warpHeaderY + (fontSize * 2) -- table starts one line below the header
+    -- Render current level name and run seed.
+    gui.drawString(game_width, font_size * 6, "Level: " .. get_level_name(state.game.level_id), nil, nil, font_size,
+        CONFIG.FONT_FACE)
+    gui.drawString(game_width, font_size * 7, "Seed: " .. state.run.seed, nil, nil, font_size, CONFIG.FONT_FACE)
 
-    -- Build an ordered list of warp log entries (only add if an entry exists for that key)
-    local warpEntries = {}
-    for _, key in ipairs(orderedKeys) do
-        if warp_log[key] then
-            table.insert(warpEntries, {
+    -- If the run is over (pending or complete), display "RUN OVER!" and "NEW PB!" if applicable.
+    if state.run.status == run_state.PENDING or state.run.status == run_state.COMPLETE then
+        gui.drawString(game_width + math.floor((ui_width / 3) * 2), font_size * 3, "RUN OVER!", "red", nil, font_size,
+            CONFIG.FONT_FACE)
+        if state.run.pb then
+            gui.drawString(game_width + math.floor((ui_width / 3) * 2), font_size * 4, "NEW PB!", "lightgreen", nil,
+                font_size, CONFIG.FONT_FACE)
+        end
+    end
+
+    -- Define an ordered list of level abbreviations for displaying the warp map and star counts.
+    local ordered_keys = {"BoB", "WF", "JRB", "CCM", "BBH", "HMC", "LLL", "SSL", "DDD", "SL", "WDW", "TTM", "THI",
+                          "TTC", "RR", "PSS", "SA", "WMotR", "Wing", "Metal", "Vanish", "BitDW", "BitFS", "BitS"}
+
+    -- Calculate positions for left and right columns.
+    local left_col_x = game_width
+    local right_col_x = game_width + math.floor(ui_width / 2)
+
+    -- Render the warp map header.
+    local warp_header_y = font_size * 9
+    gui.drawString(game_width + math.floor(ui_width / 2), warp_header_y, "== Warp Map ==", "orange", nil, font_size,
+        CONFIG.FONT_FACE, nil, "center")
+    local warp_table_start_y = warp_header_y + (font_size * 2)
+
+    -- Build a table of warp entries from the state's warp map using the ordered keys.
+    local warp_entries = {}
+    for _, key in ipairs(ordered_keys) do
+        if state.run.warp_map[key] then
+            table.insert(warp_entries, {
                 key = key,
-                value = warp_log[key]
+                value = state.run.warp_map[key]
             })
         end
     end
 
-    -- Render the warp log in 2 columns (fill left column first)
-    for i, entry in ipairs(warpEntries) do
+    -- Render warp entries in two columns.
+    for i, entry in ipairs(warp_entries) do
         local col, row
         if i <= 12 then
             col = 1
@@ -937,54 +667,50 @@ function renderGui()
             col = 2
             row = i - 12
         end
-        local x = (col == 1) and leftColX or rightColX
-        local y = warpTableStartY + (row - 1) * fontSize
-        gui.drawString(x + (padWidth / 4), y, string.format("%s → %s", entry.key, entry.value), nil, nil, fontSize,
-            fontFace, nil, "center")
+        local x = (col == 1) and left_col_x or right_col_x
+        local y = warp_table_start_y + (row - 1) * font_size
+        gui.drawString(x + (ui_width / 4), y, string.format("%s → %s", entry.key, entry.value), nil, nil, font_size,
+            CONFIG.FONT_FACE, nil, "center")
     end
 
-    -- Calculate how many rows were used in the warp log section.
-    -- (If there are fewer than 12 entries, use that number; otherwise, cap at 12.)
-    local warpRowsUsed = (#warpEntries > 0) and math.min(12, #warpEntries) or 0
+    -- Calculate vertical spacing based on the number of warp entries rendered.
+    local warp_rows_used = (#warp_entries > 0) and math.min(12, #warp_entries) or 1
 
-    ---------------------------------
-    -- Star Tracker Section Layout --
-    ---------------------------------
-    -- Now position the star tracker header based on the warp log height.
-    local starHeaderY = warpTableStartY + (warpRowsUsed * fontSize) + fontSize
-    gui.drawString(gameWidth + math.floor(padWidth / 2), starHeaderY, "== Stars Collected ==", "yellow", nil, fontSize,
-        fontFace, nil, "center")
-    local starTableStartY = starHeaderY + (fontSize * 2) -- table starts one line below the header
+    -- Render the "Stars Collected" header.
+    local star_header_y = warp_table_start_y + ((warp_rows_used + 1) * (font_size))
+    gui.drawString(game_width + math.floor(ui_width / 2), star_header_y, "== Stars Collected ==", "yellow", nil,
+        font_size, CONFIG.FONT_FACE, nil, "center")
+    local star_table_start_y = star_header_y + (font_size * 2)
 
-    -- Build an ordered list of star tracker entries (only add if an entry exists for that key)
-    local starEntries = {}
-    for _, key in ipairs(orderedKeys) do
-        if starTracker[key] then
-            table.insert(starEntries, {
+    -- Build a table of star entries from the state's star map using the ordered keys.
+    local star_entries = {}
+    for _, key in ipairs(ordered_keys) do
+        if state.run.star_map[key] then
+            table.insert(star_entries, {
                 key = key,
-                count = starTracker[key]
+                count = state.run.star_map[key]
             })
         end
     end
 
-    -- Calculate maximum label width for each column (in pixels)
-    local leftMaxWidth = 0
-    local rightMaxWidth = 0
-    for i, entry in ipairs(starEntries) do
-        local labelWidth = string.len(entry.key) * charWidth
+    -- Determine maximum label widths for left and right columns to align star icons.
+    local left_max_width = 0
+    local right_max_width = 0
+    for i, entry in ipairs(star_entries) do
+        local label_width = string.len(entry.key) * char_width
         if i <= 12 then
-            if labelWidth > leftMaxWidth then
-                leftMaxWidth = labelWidth
+            if label_width > left_max_width then
+                left_max_width = label_width
             end
         else
-            if labelWidth > rightMaxWidth then
-                rightMaxWidth = labelWidth
+            if label_width > right_max_width then
+                right_max_width = label_width
             end
         end
     end
 
-    -- Render the star tracker entries in 2 columns (left column fills first)
-    for i, entry in ipairs(starEntries) do
+    -- Render star entries along with star icons for each collected star.
+    for i, entry in ipairs(star_entries) do
         local col, row
         if i <= 12 then
             col = 1
@@ -993,226 +719,72 @@ function renderGui()
             col = 2
             row = i - 12
         end
-        local x = (col == 1) and leftColX or rightColX
-        local y = starTableStartY + (row - 1) * (fontSize + 3)
-        -- Draw the level key label
-        gui.drawString(x, y, entry.key, nil, nil, fontSize, fontFace)
-        -- Determine the starting position for star icons based on the maximum label width for the column
-        local spacing = fontSize -- additional space after the label
-        local maxLabelWidth = (col == 1) and leftMaxWidth or rightMaxWidth
-        local iconsStartX = x + maxLabelWidth + spacing
-        -- Draw the star icons for the collected stars
+        local x = (col == 1) and left_col_x or right_col_x
+        local y = star_table_start_y + (row - 1) * (font_size + 3)
+        gui.drawString(x, y, entry.key, nil, nil, font_size, CONFIG.FONT_FACE)
+
+        local spacing = font_size
+        local max_label_width = (col == 1) and left_max_width or right_max_width
+        local icons_start_x = x + max_label_width + spacing
+
         for j = 1, entry.count do
-            gui.drawImage("ironmario_tracker/star.png", iconsStartX + (j - 1) * fontSize, y + (fontSize * 0.1),
-                fontSize * 0.8, fontSize * 0.8)
+            gui.drawImage("img/star.png", icons_start_x + (j - 1) * font_size, y + (font_size * 0.1), font_size * 0.8,
+                font_size * 0.8)
         end
     end
 
-    if showMusic then
-        gui.drawString(20 + math.floor(charWidth / 2), gameHeight - (20 + math.floor(fontSize * 1.25)), musicName, nil,
-            nil, fontSize, fontFace)
+    -- Optionally display the current song title if the toggle is enabled.
+    if CONFIG.SHOW_SONG_TITLE and CONFIG.MUSIC_DATA.SONG_MAP[state.game.song] then
+        gui.drawString(20 + math.floor(char_width / 2), game_height - (20 + math.floor(font_size * 1.25)),
+            get_song_name(state.game.song), nil, nil, font_size, CONFIG.FONT_FACE)
     end
 
-    gui.drawString(gameWidth + padWidth, gameHeight - fontSize,
-        "v" .. trackerVersion .. ' by WaffleSmacker and KaaniDog', "gray", nil, math.max(math.floor(fontSize / 2), 8),
-        fontFace, nil, "right")
+    -- Display version information and credits at the bottom right of the UI.
+    gui.drawString(game_width + ui_width, game_height - font_size,
+        "v" .. CONFIG.TRACKER_VERSION .. ' by WaffleSmacker and KaaniDog', "gray", nil,
+        math.max(math.floor(font_size / 2), 8), CONFIG.FONT_FACE, nil, "right")
 end
 
----------------------------------
----------- Main Action ----------
----------------------------------
+-- Read stored attempt count and personal best star count from files.
+read_attempts_file()
+read_pb_stars_file()
 
+console.clear() -- Clear the console for a clean output.
+
+-- Main loop: executes every frame.
 while true do
-    frameCounter = frameCounter + 1
+    memory.usememorydomain("RDRAM") -- Switch to the RDRAM memory domain for reading game data.
 
-    -- This is very time sensitive and needs to run each frame.
-    damage_time = memory.readbyte(addressMarioHurtCounter) -- this tracks how long mario should take damage (does not apply underwater)
-    if damage_time > 0 and run_start and elapsedTime > 0 then
-        damage_was_taken = true
+    -- Process on every other frame to reduce CPU load.
+    if emu.framecount() % 2 == 0 then
+        -- Update game state if the run isn't already pending (i.e., if it's still in progress).
+        if state.run.status ~= run_state.PENDING then
+            update_game_state()
+        end
+
+        -- If the run is active, check for any conditions that signal the run is over.
+        if state.run.status == run_state.ACTIVE then
+            check_run_over_conditions()
+        end
+
+        -- If a run has ended (pending state), write the run data to files.
+        if state.run.status == run_state.PENDING then
+            write_data()
+        end
+
+        -- Handle input: toggle the song title display if specific buttons are pressed.
+        local current_inputs = joypad.get()
+        if current_inputs["P1 L"] and current_inputs["P1 R"] and current_inputs["P1 A"] and current_inputs["P1 B"] and
+            not state.input.music_toggle_pressed then
+            state.input.music_toggle_pressed = true
+            CONFIG.SHOW_SONG_TITLE = not CONFIG.SHOW_SONG_TITLE
+        elseif (not current_inputs["P1 L"] or not current_inputs["P1 R"] or not current_inputs["P1 A"] or
+            not current_inputs["P1 B"]) and state.input.music_toggle_pressed then
+            state.input.music_toggle_pressed = false
+        end
+
+        render_ui() -- Render the UI overlay with the current state.
     end
 
-    if frameCounter >= 30 then -- Run logic every 30 frames
-        frameCounter = 0 -- Reset the counter
-
-        previous_hp = hp
-        previous_level = level
-        previous_seed = seed
-        hp = memory.read_u16_be(addressHudHealthWedges)
-        coins = memory.read_u16_be(addressHudCoins)
-        stars = memory.read_u16_be(addressHudStars)
-        level = memory.read_u16_be(addressCurrLevelNum)
-        terrain = memory.read_u16_be(addressMarioGeometryCurrFloorType)
-        music = memory.read_u16_be(addressCurrentMusic)
-        seed = memory.read_u32_be(addressRandomizerGameSeed)
-        mario_action = memory.read_u32_be(addressMarioAction)
-        mario_pos = read3float(addressMarioPos)
-
-        local delayedWarpOp = memory.read_u16_be(addressDelayedWarpOp)
-
-        local in_water = bitoper(mario_action, 0xC0, AND) == 0xC0
-        local marioInput = memory.read_u16_be(addressMarioInput)
-        local marioFlags = memory.read_u32_be(addressMarioInput)
-
-        local in_gas = bitoper(marioInput, 0x100, AND) == 0x100
-        local intangible = bitoper(mario_action, 0x1000, AND) == 0x1000
-        local metal_cap = bitoper(marioFlags, 4, AND) == 4
-
-        local taking_gas_damage = in_gas and not intangible and not metal_cap
-
-        -- Get the level name
-        local levelName = LocationMap[level] and LocationMap[level][1] or "Unknown Level"
-        local levelAbbr = LocationMap[level] and LocationMap[level][2] or "Unknown"
-        local levelId = level
-
-        local musicName = getSongName(displayData.music)
-
-        -- Detect and log warp transitions
-        local intended_level = memory.read_u32_be(addressCurrIntendedLevel)
-        if (intended_level ~= previous_intended_level) then
-            logLevel(level, intended_level)
-        end
-        previous_intended_level = intended_level
-
-        -- local warpPoint = checkTerrainForWarp(terrain)
-        -- if warpPoint then
-        --     logWarpTransition(warpPoint, level)
-        -- end
-
-        -- local warpLabel = checkProximityToWarpPoints(mario_pos, warpCoords)
-        -- if warpLabel then
-        --     checkAndLogWarpTransition(mario_pos, warpCoords, previous_level, level)
-        -- end
-
-        -- Start the timer when leaving the menu
-        startRunTimer(level)
-        -- Reset the warp log if in Menu (level 1)
-        resetWarpLog(level)
-
-        -- Calculate elapsed time
-        if runStartTime and not logged_run then
-            elapsedTime = os.time() - runStartTime
-        end
-
-        -- Check if this is a PB run and update the PB
-        if stars > pbStars and stars <= 120 then
-            pbStars = stars
-            savePB(pbStars) -- Save new PB if valid
-        end
-
-        -- Update the star tracker
-        if level > 1 and level ~= 16 and stars then
-            local levelAbbr = LocationMap[level] and LocationMap[level][2] or "Unknown"
-            if levelAbbr ~= "Unknown" then
-                -- Check if there are unlogged stars
-                if totalLoggedStars() < stars then
-                    -- Initialize star count for the level if not already set
-                    starTracker[levelAbbr] = starTracker[levelAbbr] or 0
-
-                    -- Log the new star
-                    starTracker[levelAbbr] = starTracker[levelAbbr] + 1
-                    console.write(string.format("Logged 1 star for %s. Total: %d stars.\n", levelAbbr,
-                        starTracker[levelAbbr]))
-                end
-            end
-        end
-
-        -- Checks to see if mario has taken damage or not by using the damage meter.
-        if damage_was_taken and not in_water and not taking_gas_damage and not run_end and run_start and elapsedTime > 5 then
-            reason = string.format("Took damage from Enemy or fall")
-            run_end = true
-            shouldSaveAttempt = true
-
-            -- Snowman Land water damage
-        elseif in_water and level == 10 and hp < previous_hp and not run_end and run_start then
-            reason = "Took cold water damage in Snowman Land"
-            shouldSaveAttempt = true
-
-            -- General water damage
-        elseif in_water and isMarioActionInList(mario_action, mario_water_damage) and not run_end and run_start then
-            reason = "Suspected water damage"
-            run_end = true
-            shouldSaveAttempt = true
-
-            -- Hazy Gas Death
-        elseif level == 7 and hp < previous_hp and not in_water and not run_end and run_start then
-            reason = "Hazy Gas Got You"
-            shouldSaveAttempt = true
-
-        elseif not LevelHasWater(level) and not run_end and run_start and hp < previous_hp then
-            reason = "Took Damage"
-            shouldSaveAttempt = true
-
-            -- Mario falls out of course
-            -- elseif isMarioActionInList(mario_action, mario_fell_out_of_course) and not run_end and run_start then
-        elseif ((delayedWarpOp == 18) or (delayedWarpOp == 20)) and not run_end and run_start then
-            reason = "Mario Fell out of course"
-            run_end = true
-            shouldSaveAttempt = true
-        end
-
-        -- Perform save and print only if needed
-        if shouldSaveAttempt and not logged_run then
-            print(reason)
-            saveAttempt(attemptDataCsv, attemptsFile, seed, attemptCount, stars, levelAbbr,
-                formatElapsedTime(elapsedTime), starTracker)
-            logged_run = true
-            run_start = false
-        end
-
-        if run_end and seed ~= previous_seed then
-            attemptCount = attemptCount + 1
-            run_end = false
-            damage_was_taken = false
-            logged_run = false
-            shouldSaveAttempt = false
-            reason = ""
-        end
-
-        ---------------------------------
-        ----- Getting GUI Variables -----
-        ---------------------------------
-
-        -- Update display data for GUI
-        displayData.attemptCount = attemptCount
-        displayData.elapsedTime = elapsedTime
-        displayData.stars = stars
-        displayData.seed = seed
-        displayData.levelAbbr = levelAbbr
-        displayData.levelId = levelId
-        displayData.marioAction = mario_action
-        displayData.pbStars = pbStars
-        displayData.runStatus = "RUN OVER"
-        displayData.runStatusPB = "RUN OVER - NEW PB!"
-        displayData.warpLog = warp_log
-        displayData.logged_run = logged_run
-        displayData.marioInWater = in_water
-        displayData.marioPos = mario_pos
-        displayData.music = music
-
-        if displayData.music and previous_music ~= musicName then
-            saveMusic(musicName)
-            previous_music = musicName
-        end
-    end
-
-    --------------------------------
-    ----- Display Tracker Info -----
-    --------------------------------
-
-    local currentInputs = joypad.get()
-
-    if currentInputs["P1 L"] and currentInputs["P1 R"] and currentInputs["P1 A"] and currentInputs["P1 B"] and
-        not musicTogglePressed then
-        musicTogglePressed = true
-        showMusic = not showMusic
-    elseif (not currentInputs["P1 L"] or not currentInputs["P1 R"] or not currentInputs["P1 A"] or
-        not currentInputs["P1 B"]) and musicTogglePressed then
-        musicTogglePressed = false
-    end
-
-    if (emu.framecount() % 60 == 0) then
-        renderGui()
-    end
-
-    emu.frameadvance()
+    emu.frameadvance() -- Advance to the next frame.
 end
