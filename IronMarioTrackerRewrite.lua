@@ -734,7 +734,7 @@ local function render_ui()
     end
 
     -- Optionally display the current song title if the toggle is enabled.
-    if CONFIG.SHOW_SONG_TITLE then
+    if CONFIG.SHOW_SONG_TITLE and CONFIG.MUSIC_DATA.SONG_MAP[state.game.song] then
         gui.drawString(20 + math.floor(char_width / 2), game_height - (20 + math.floor(font_size * 1.25)),
             get_song_name(state.game.song), nil, nil, font_size, CONFIG.FONT_FACE)
     end
