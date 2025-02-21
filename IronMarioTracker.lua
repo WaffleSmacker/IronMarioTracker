@@ -487,8 +487,6 @@ local function check_run_over_conditions()
         end
     elseif state.game.delayed_warp_op == 18 or state.game.delayed_warp_op == 20 then
         state.run.end_reason = 'Fell Out of Level'
-    else
-        state.run.end_reason = "HOW?" -- Generic fallback reason.
     end
 
     -- If an end reason is determined, mark the run as pending and record the end time.
