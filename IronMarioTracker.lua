@@ -460,7 +460,7 @@ local function update_game_state()
     end
 
     -- If the level indicates a new run (level_id 16) and the run is not already active, initialize a new run.
-    if state.game.level_id == 16 and state.run.status ~= run_state.ACTIVE then
+    if state.game.level_id == 16 and state.run.status == run_state.INACTIVE then
         state.run.status = run_state.ACTIVE
         state.run.end_reason = nil
         state.run.pb = false
@@ -468,6 +468,10 @@ local function update_game_state()
         state.run.warp_map = {} -- Clear previous warp data.
         state.run.star_map = {} -- Clear previous star data.
         CONFIG.USER.ATTEMPTS = CONFIG.USER.ATTEMPTS + 1 -- Increment the attempt count.
+    end
+
+    if state.game.level_id == 1 and state.run.status == run_state.COMPLETE then
+        state.run.status = run_state.INACTIVE
     end
 end
 
