@@ -7,7 +7,7 @@ local tablex = require("lib.pl.tablex") -- Extended table functions (e.g., deepc
 
 -- Main configuration table that holds version info, file paths, memory addresses, and user data.
 local CONFIG = {
-    TRACKER_VERSION = '1.1.0',
+    TRACKER_VERSION = '1.1.1',
     FONT_FACE = 'Lucida Console',
     SHOW_SONG_TITLE = false, -- Flag to toggle song title display on the UI.
     FILES = {
@@ -18,13 +18,13 @@ local CONFIG = {
         WARP_LOG = 'usr/warp_log.json' -- File to log warp map data as JSON.
     },
     MEM = {
-        MARIO_BASE = 0x1a02e0, -- Base memory address for Mario-related data.
-        HUD_BASE = 0x1a02d0, -- Base memory address for HUD elements.
-        CURRENT_LEVEL_ID = 0x18fd18, -- Address for the current level ID.
-        CURRENT_SEED = 0x1cdf20, -- Address for the current run's seed.
-        DELAYED_WARP_OP = 0x1a02bc, -- Address for delayed warp operation code.
-        INTENDED_LEVEL_ID = 0x19f06c, -- Address for the intended level after a warp.
-        CURRENT_SONG_ID = 0x1947fe -- Address for the current song ID.
+        MARIO_BASE = 0x1a0340, -- Base memory address for Mario-related data.
+        HUD_BASE = 0x1a0330, -- Base memory address for HUD elements.
+        CURRENT_LEVEL_ID = 0x18fd78, -- Address for the current level ID.
+        CURRENT_SEED = 0x1cdf80, -- Address for the current run's seed.
+        DELAYED_WARP_OP = 0x1a031c, -- Address for delayed warp operation code.
+        INTENDED_LEVEL_ID = 0x19f0cc, -- Address for the intended level after a warp.
+        CURRENT_SONG_ID = 0x19485e -- Address for the current song ID.
     },
     USER = {
         ATTEMPTS = 0, -- Total number of attempts (will be updated from file).
@@ -245,7 +245,19 @@ CONFIG.MUSIC_DATA = {
         [150] = {"Mario Kart 64", "Frappe Snowland"},
         [151] = {"Donkey Kong 64", "Gloomy Galleon"},
         [152] = {"Mario Kart 64", "Bowser's Castle"},
-        [153] = {"Mario Kart 64", "Rainbow Road"}
+        [153] = {"Mario Kart 64", "Rainbow Road"},
+        [154] = {"Donkey Kong Country 2", "Rigging Jib-Jig"},
+        [155] = {"Donkey Kong Country 2", "Crocodile Isle"},
+        [156] = {"The Legend of Zelda: The Wind Waker", "Dragon Roost Island"},
+        [157] = {"Pokémon Black & White", "Accumula Town"},
+        [158] = {"Pokémon HeartGold & SoulSilver", "Vermilion City"},
+        [159] = {"Undertale", "Snowdin Town"},
+        [160] = {"Undertale", "Bonetrousle"},
+        [161] = {"Undertale", "Death by Glamour"},
+        [162] = {"Undertale", "Home"},
+        [163] = {"Undertale", "Ruins"},
+        [164] = {"Undertale", "Spider Dance"},
+        [165] = {"Undertale", "Waterfall"}
     }
 }
 
@@ -290,7 +302,8 @@ local state = {
     }
 }
 
-local BACKGROUND_IMAGES = {"(None)", "Cave", "City", "Desert", "Fire", "Forest", "Mountains", "Ocean", "Sky", "Storm"}
+local BACKGROUND_IMAGES = {"(None)", "Cave", "City", "Desert", "Fire", "Forest", "Mountains", "Ocean", "Pattern", "Sky",
+                           "Storm"}
 
 -- Table to store the previous state (for change detection in UI rendering).
 local last_state = {}
