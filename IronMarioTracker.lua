@@ -7,8 +7,7 @@ local tablex = require("lib.pl.tablex") -- Extended table functions (e.g., deepc
 
 -- Main configuration table that holds version info, file paths, memory addresses, and user data.
 local CONFIG = {
-    TRACKER_VERSION = '1.0.2.4',
-    COMPATIBLE_ROM_VERSION = 'v1.0.2',
+    TRACKER_VERSION = '1.1.0',
     FONT_FACE = 'Lucida Console',
     SHOW_SONG_TITLE = false, -- Flag to toggle song title display on the UI.
     FILES = {
@@ -19,18 +18,19 @@ local CONFIG = {
         WARP_LOG = 'usr/warp_log.json' -- File to log warp map data as JSON.
     },
     MEM = {
-        MARIO_BASE = 0x19ca70, -- Base memory address for Mario-related data.
-        HUD_BASE = 0x19ca60, -- Base memory address for HUD elements.
-        CURRENT_LEVEL_ID = 0x18e0e8, -- Address for the current level ID.
-        CURRENT_SEED = 0x1ca6ac, -- Address for the current run's seed.
-        DELAYED_WARP_OP = 0x19ca4c, -- Address for delayed warp operation code.
-        INTENDED_LEVEL_ID = 0x19b7fc, -- Address for the intended level after a warp.
-        CURRENT_SONG_ID = 0x1928ae -- Address for the current song ID.
+        MARIO_BASE = 0x1a02e0, -- Base memory address for Mario-related data.
+        HUD_BASE = 0x1a02d0, -- Base memory address for HUD elements.
+        CURRENT_LEVEL_ID = 0x18fd18, -- Address for the current level ID.
+        CURRENT_SEED = 0x1cdf20, -- Address for the current run's seed.
+        DELAYED_WARP_OP = 0x1a02bc, -- Address for delayed warp operation code.
+        INTENDED_LEVEL_ID = 0x19f06c, -- Address for the intended level after a warp.
+        CURRENT_SONG_ID = 0x1947fe -- Address for the current song ID.
     },
     USER = {
         ATTEMPTS = 0, -- Total number of attempts (will be updated from file).
         PB_STARS = 0 -- Personal best star count (will be updated from file).
-    }
+    },
+    BACKGROUND_IMAGE = "(None)" -- Default background image for the UI.
 }
 
 -- Additional memory addresses for Mario-specific data derived from MARIO_BASE.
@@ -249,6 +249,19 @@ CONFIG.MUSIC_DATA = {
     }
 }
 
+memory.usememorydomain("ROM")
+
+local VALID_ROM_VERSION = nil
+
+local rom_signature_bytes = memory.read_bytes_as_array(0x20, 12) -- Read 6 bytes from ROM.
+local rom_signature = string.char(table.unpack(rom_signature_bytes)) -- Convert bytes to string.
+
+if rom_signature == "IronMario 64" then
+    VALID_ROM_VERSION = true
+else
+    VALID_ROM_VERSION = false
+end
+
 -- Define possible run states.
 local run_state = {
     INACTIVE = 0, -- Run has not started.
@@ -277,19 +290,12 @@ local state = {
     }
 }
 
+local BACKGROUND_IMAGES = {"(None)", "Cave", "City", "Desert", "Fire", "Forest", "Mountains", "Ocean", "Sky", "Storm"}
+
 -- Table to store the previous state (for change detection in UI rendering).
 local last_state = {}
 
--- Function to read and return the ROM version from a specific memory address.
-local function get_rom_version()
-    memory.usememorydomain("ROM") -- Switch memory domain to ROM.
-    local rom_version_bytes = memory.read_bytes_as_array(0x2A, 6) -- Read 6 bytes from ROM.
-    local rom_version = string.char(table.unpack(rom_version_bytes)) -- Convert byte array to string.
-    return rom_version
-end
-
--- Save the ROM version to the CONFIG table.
-CONFIG.RUNNING_ROM_VERSION = get_rom_version()
+local config_form = nil -- Placeholder for the configuration form.
 
 -- Initialize the attempt data file if it doesn't exist by writing a CSV header.
 local function init_attempt_data_file()
@@ -558,6 +564,32 @@ local function write_data()
     state.run.status = run_state.COMPLETE
 end
 
+local function load_config()
+    -- Load the configuration file if it exists.
+    local file = io.open("config.json", "r")
+    if file then
+        local config_data = json.decode(file:read("*all"))
+        if config_data then
+            CONFIG.BACKGROUND_IMAGE = config_data.BACKGROUND_IMAGE
+            CONFIG.SHOW_SONG_TITLE = config_data.SHOW_SONG_TITLE
+        end
+        file:close()
+    end
+end
+
+local function save_config()
+    -- Save the configuration to a file.
+    local file = io.open("config.json", "w+")
+    if file then
+        local config_data = {
+            BACKGROUND_IMAGE = CONFIG.BACKGROUND_IMAGE,
+            SHOW_SONG_TITLE = CONFIG.SHOW_SONG_TITLE
+        }
+        file:write(json.encode(config_data))
+        file:close()
+    end
+end
+
 -- Render the on-screen UI overlay with current run and game data.
 local function render_ui()
     local game_width = client.bufferwidth() -- Get current game screen width.
@@ -570,25 +602,67 @@ local function render_ui()
     local font_size = math.max(math.floor(game_height / 50), 8)
     local char_width = math.floor(font_size / 1.6)
 
-    local icon_size = math.floor(game_height / 12) -- Define icon size for logos, stars, etc.
+    local logo_size = math.floor(game_height / 12) -- Define icon size for logos, stars, etc.
 
     -- Set extra padding for the game screen to accommodate the UI.
     client.SetGameExtraPadding(0, 0, ui_width + 20, 0)
+
+    -- Call a placeholder function if the left mouse button is pressed when the mouse is within the logo image.
+    if input.getmouse().Left and input.getmouse().X >= game_width and input.getmouse().X <= (game_width + logo_size) and
+        input.getmouse().Y >= (game_height - (logo_size + 20)) and input.getmouse().Y <= game_height and not config_form then
+        config_form = forms.newform(210, 110, "Configuration", function()
+            forms.destroy(config_form)
+            config_form = nil
+        end)
+
+        local config_form_height = forms.getproperty(config_form, "Height")
+        local config_form_width = forms.getproperty(config_form, "Width")
+
+        -- Add a dropdown to select the background image.
+        local background_image_dropdown_label = forms.label(config_form, "Background Image:", 10, 12, 100, 20)
+        local background_image_dropdown = forms.dropdown(config_form, BACKGROUND_IMAGES, 110, 10, 90, 20)
+        forms.setproperty(background_image_dropdown, "SelectedItem", CONFIG.BACKGROUND_IMAGE)
+
+        -- Add a checkbox to toggle the song title display.
+        local show_song_title_checkbox_label = forms.label(config_form, "Show Song Title", 30, 41, 100, 20)
+        local show_song_title_checkbox = forms.checkbox(config_form, nil, 13, 40)
+        forms.setproperty(show_song_title_checkbox, "Checked", CONFIG.SHOW_SONG_TITLE)
+
+        -- Add a button to save the configuration.
+        forms.button(config_form, "OK", function()
+            CONFIG.BACKGROUND_IMAGE = forms.getproperty(background_image_dropdown, "SelectedItem")
+            CONFIG.SHOW_SONG_TITLE = forms.ischecked(show_song_title_checkbox)
+            save_config()
+            forms.destroy(config_form)
+            config_form = nil
+        end, 10, 70, 90, 30)
+
+        -- Add a button to close the configuration form.
+        forms.button(config_form, "Cancel", function()
+            forms.destroy(config_form)
+            config_form = nil
+        end, 110, 70, 90, 30)
+    end
 
     -- Skip rendering if no changes in state (to save processing).
     if tablex.deepcompare(state, last_state) then
         return
     end
 
+    -- Draw the background image if one is selected.
+    if CONFIG.BACKGROUND_IMAGE ~= "(None)" then
+        gui.drawImage("img/bg/" .. CONFIG.BACKGROUND_IMAGE .. ".jpg", game_width, 0, ui_width, game_height)
+    end
+
     -- Draw the tracker logo in the bottom right of the game screen.
-    gui.drawImage("img/logo.png", game_width, game_height - (icon_size + 20), icon_size, icon_size)
+    gui.drawImage("img/logo.png", game_width, game_height - (logo_size + 20), logo_size, logo_size)
 
     -- Draw the tracker title centered in the UI panel.
     gui.drawString(game_width + math.floor(ui_width / 2), font_size, "IronMario Tracker", "lightblue", nil, font_size,
         CONFIG.FONT_FACE, nil, "center")
 
     -- If the running ROM version does not match the compatible version, show an error message.
-    if CONFIG.RUNNING_ROM_VERSION ~= CONFIG.COMPATIBLE_ROM_VERSION then
+    if not VALID_ROM_VERSION then
         gui.drawString(game_width + math.floor(ui_width / 2), font_size * 10, "Incompatible\nROM version!", "red", nil,
             font_size * 2, CONFIG.FONT_FACE, nil, "center")
         gui.drawString(game_width + math.floor(ui_width / 2), font_size * 15,
@@ -742,6 +816,8 @@ local function render_ui()
         "v" .. CONFIG.TRACKER_VERSION .. ' by WaffleSmacker and KaaniDog', "gray", nil,
         math.max(math.floor(font_size / 2), 8), CONFIG.FONT_FACE, nil, "right")
 end
+
+load_config()
 
 -- Read stored attempt count and personal best star count from files.
 read_attempts_file()

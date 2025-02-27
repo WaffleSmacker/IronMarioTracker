@@ -5,3 +5,4 @@
 !/ironmario_tracker/star.png
 /usr/*
 !/usr/.gitkeep
+/config.json
