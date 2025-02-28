@@ -5,6 +5,9 @@
 Check out the [releases page](https://github.com/WaffleSmacker/IronMarioTracker/releases) to get the most recent version of the tracker.
 Download the IronMarioTracker.zip file.
 
+# Requirements
+This script is fully supported only on the latest version of Bizhawk. Old versions are known to have compatibility problems with more modern Lua code such as that used in the tracker.
+
 # Usage
 Unzip and load this script into the Lua Console of Bizhawk after you load the IronMario ROM.
 To toggle the song title display, press L+R+A+B.
