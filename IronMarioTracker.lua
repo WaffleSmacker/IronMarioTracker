@@ -4,6 +4,18 @@
 -- It uses lunajson for JSON encoding and pl.tablex for deep table functions.
 local json = require("lib.lunajson") -- JSON encoding/decoding library
 local tablex = require("lib.pl.tablex") -- Extended table functions (e.g., deepcopy, deepcompare)
+local EZ_config = {}   -- please don't touch this line
+
+-- *************** 'EZ' config for 'normie' users ***************
+-- please adjust your default preferences BELOW ----->
+-- text
+EZ_config.FONT = "Lucia Sans Console" --font to use for basic display purposes ***NOT IMPLEMENTED YET***
+-- music/sound
+EZ_config.TURN_OFF_MUSIC = false;   -- weather tracker will suppress music from playing. TRUE = no music ***NOT IMPLEMENTED YET***
+EZ_config.SHOW_SONG_TITLE = true;   -- weather tracker will show/display the current music track on-screen
+EZ_config.SONG_TITLE_POS = "bottom left";   --where song/music display will show on-screen ***NOT IMPLEMENTED YET***
+
+-- **************************************************************
 
 -- BizHawk memory alias/shim
 -- /potentially/ allow other emulators to use this script
@@ -18,7 +30,7 @@ local MEMOP = {
     -- write:
     writebyte = memory.writebyte,
     writeword = memory.write_u16_be,
-    writelong = memory.write_s32_be,
+    writelong = memory.write_u32_be,
     writefloat = memory.writefloat
 }
 
