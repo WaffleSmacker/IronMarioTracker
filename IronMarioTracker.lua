@@ -6,12 +6,21 @@ local json = require("lib.lunajson") -- JSON encoding/decoding library
 local tablex = require("lib.pl.tablex") -- Extended table functions (e.g., deepcopy, deepcompare)
 
 -- BizHawk memory alias/shim
-local readbyte = memory.read_u8
-local readword = memory.read_u16_be
-local writebyte = memory.writebyte
-local writeword = memory.write_u16_be
-local writelong = memory.write_s32_be
-local writefloat = memory.writefloat
+-- /potentially/ allow other emulators to use this script
+-- change MEMOP to correct functions for different emulators later
+-- by detecting emulator.
+local MEMOP = {
+    -- read:
+    readbyte = memory.read_u8,
+    readword = memory.read_u16_be,
+    readlong = memory.read_u32_be,
+    readfloat = memory.readfloat,
+    -- write:
+    writebyte = memory.writebyte,
+    writeword = memory.write_u16_be,
+    writelong = memory.write_s32_be,
+    writefloat = memory.writefloat
+}
 
 -- Main configuration table that holds version info, file paths, memory addresses, and user data.
 local CONFIG = {
@@ -404,16 +413,16 @@ local function update_game_state()
     last_state = tablex.deepcopy(state) -- Store the previous state for later comparison.
 
     state.last_updated_time = os.time() -- Update the timestamp.
-    state.game.delayed_warp_op = memory.read_u16_be(CONFIG.MEM.DELAYED_WARP_OP)
-    state.game.intended_level_id = memory.read_u32_be(CONFIG.MEM.INTENDED_LEVEL_ID)
-    state.game.level_id = memory.read_u16_be(CONFIG.MEM.CURRENT_LEVEL_ID)
-    state.game.song = memory.readbyte(CONFIG.MEM.CURRENT_SONG_ID)
-    state.mario.action = memory.read_u32_be(CONFIG.MEM.MARIO.ACTION)
-    state.mario.flags = memory.read_u32_be(CONFIG.MEM.MARIO.INPUT) -- Read flags from the same address.
-    state.mario.hp = memory.read_u16_be(CONFIG.MEM.HUD.HEALTH)
-    state.mario.input = memory.read_u16_be(CONFIG.MEM.MARIO.INPUT) -- Duplicate read; ensure the correct width.
-    state.run.seed = memory.read_u32_be(CONFIG.MEM.CURRENT_SEED)
-    state.run.stars = memory.read_u16_be(CONFIG.MEM.HUD.STARS)
+    state.game.delayed_warp_op = MEMOP.readword(CONFIG.MEM.DELAYED_WARP_OP)
+    state.game.intended_level_id = MEMOP.readlong(CONFIG.MEM.INTENDED_LEVEL_ID)
+    state.game.level_id = MEMOP.readword(CONFIG.MEM.CURRENT_LEVEL_ID)
+    state.game.song = MEMOP.readword(CONFIG.MEM.CURRENT_SONG_ID)
+    state.mario.action = MEMOP.readlong(CONFIG.MEM.MARIO.ACTION)
+    state.mario.flags = MEMOP.readlong(CONFIG.MEM.MARIO.INPUT) -- Read flags from the same address.
+    state.mario.hp = MEMOP.readword(CONFIG.MEM.HUD.HEALTH)
+    state.mario.input = MEMOP.readword(CONFIG.MEM.MARIO.INPUT) -- Duplicate read; ensure the correct width.
+    state.run.seed = MEMOP.readlong(CONFIG.MEM.CURRENT_SEED)
+    state.run.stars = MEMOP.readword(CONFIG.MEM.HUD.STARS)
 
     -- Read Mario's 3D position from memory.
     local pos_data = read3float(CONFIG.MEM.MARIO.POS)
