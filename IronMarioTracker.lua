@@ -5,6 +5,9 @@
 local json = require("lib.lunajson") -- JSON encoding/decoding library
 local tablex = require("lib.pl.tablex") -- Extended table functions (e.g., deepcopy, deepcompare)
 
+-- Bizhawk Memory shim/aliases
+local readword = memory.read_u16_be
+
 -- Main configuration table that holds version info, file paths, memory addresses, and user data.
 local CONFIG = {
     TRACKER_VERSION = '1.1.1',
@@ -24,7 +27,7 @@ local CONFIG = {
         CURRENT_SEED = 0x1cdf80, -- Address for the current run's seed.
         DELAYED_WARP_OP = 0x1a031c, -- Address for delayed warp operation code.
         INTENDED_LEVEL_ID = 0x19f0cc, -- Address for the intended level after a warp.
-        CURRENT_SONG_ID = 0x0a3781 -- Address for the current song ID.
+        CURRENT_SONG_ID = 0x8019EB3C -- Address for the current song ID.
     },
     USER = {
         ATTEMPTS = 0, -- Total number of attempts (will be updated from file).
@@ -399,7 +402,7 @@ local function update_game_state()
     state.game.delayed_warp_op = memory.read_u16_be(CONFIG.MEM.DELAYED_WARP_OP)
     state.game.intended_level_id = memory.read_u32_be(CONFIG.MEM.INTENDED_LEVEL_ID)
     state.game.level_id = memory.read_u16_be(CONFIG.MEM.CURRENT_LEVEL_ID)
-    state.game.song = memory.readbyte(CONFIG.MEM.CURRENT_SONG_ID)
+    state.game.song = readword(CONFIG.MEM.CURRENT_SONG_ID)
     state.mario.action = memory.read_u32_be(CONFIG.MEM.MARIO.ACTION)
     state.mario.flags = memory.read_u32_be(CONFIG.MEM.MARIO.INPUT) -- Read flags from the same address.
     state.mario.hp = memory.read_u16_be(CONFIG.MEM.HUD.HEALTH)
