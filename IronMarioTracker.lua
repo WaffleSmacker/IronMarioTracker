@@ -383,7 +383,7 @@ local function get_song_name(song_id)
     if song_info then
         return song_info
     end
-    return "Unknown"
+    return "no song info"
 end
 
 -- Utility function to read three consecutive floats from a given memory address.
@@ -825,15 +825,21 @@ local function render_ui()
             -- get_song_name(state.game.song), nil, nil, font_size, CONFIG.FONT_FACE)
     -- end
 
-	if CONFIG.SHOW_SONG_TITLE then
-		gui.use_surface("client") 
-		local mus_note_bot_y = client.screenheight() - 32
-		gui.drawImage("img/music_note2.png", 12, mus_note_bot_y)
-		local mus_bottom_y = mus_note_bot_y + 3
-		TextHelper.draw(40, mus_bottom_y+1, get_song_name(state.game.song), "black", 16)
-		TextHelper.draw(39, mus_bottom_y, get_song_name(state.game.song), "white", 16)
-		gui.use_surface("emu")
+	-- show current song
+	local current_song_title = get_song_name(state.game.song)
+	gui.use_surface("client") -- set client gfx surface
+	gui.clearGraphics()
+	if current_song_title ~= "no song info" then
+		
+		if CONFIG.SHOW_SONG_TITLE or USER_CONFIG.SHOW_SONG_TITLE then
+			local mus_note_bot_y = client.screenheight() - 32
+			gui.drawImage("img/music_note2.png", 12, mus_note_bot_y)
+			local mus_bottom_y = mus_note_bot_y + 3
+			TextHelper.draw(40, mus_bottom_y+1, get_song_name(state.game.song), "black", 16)
+			TextHelper.draw(39, mus_bottom_y, get_song_name(state.game.song), "white", 16)
+		end
 	end
+	gui.use_surface("emu") -- set back to Emu gfx surface
 
     -- Display version information and credits at the bottom right of the UI.
     gui.drawString(game_width + ui_width, game_height - 5 - font_size,
@@ -847,6 +853,7 @@ end
 -- helper function to draw text 'GUD'  >:)
 -- can be underloaded or overloaded with any drawstring args
 TextHelper = {}
+TextHelper.size_tbl = { tiny = 8, smol = 9, small = 10, medium = 11, large = 12, big = 14, huge = 16 }
 function TextHelper.draw(x, y, str, color, size)
     if type(x) == "string" and not y then
         local parts = {}
@@ -860,8 +867,7 @@ function TextHelper.draw(x, y, str, color, size)
         if type(size) == "number" then
             font_size = size
         elseif type(size) == "string" then
-            local sizes = { tiny = 8, smol = 9, small = 10, medium = 11, large = 12, big = 14, huge = 16 }
-            font_size = sizes[size:lower()] or 11
+            font_size = TextHelper.sizes[size:lower()] or 11
         end
     end
 
@@ -897,13 +903,12 @@ end
 function getTrackerCompatibility()
 	return FOR_IRONMARO_VERSION
 end
+
 -- ************************* stuff to DO before main loop ****************************
 load_config()
-
 -- Read stored attempt count and personal best star count from files.
 read_attempts_file()
 read_pb_stars_file()
-
 console.clear() -- Clear the console for a clean output.
 gui.clearGraphics() -- Clear GFX just in-case
 
@@ -920,30 +925,19 @@ while VERS_COMPATIBLE do
 
         -- If the run is active, check for any conditions that signal the run is over.
         if state.run.status == run_state.ACTIVE then
-            --check_run_over_conditions()
+            check_run_over_conditions()
         end
 
         -- If a run has ended (pending state), write the run data to files.
         if state.run.status == run_state.PENDING then
-            --write_data()
+            write_data()
         end
 
-        -- Handle input: toggle the song title display if specific buttons are pressed.
-        -- local current_inputs = joypad.get()
-        -- if current_inputs["P1 L"] and current_inputs["P1 R"] and current_inputs["P1 A"] and current_inputs["P1 B"] and
-            -- not state.input.music_toggle_pressed then
-            -- state.input.music_toggle_pressed = true
-            -- CONFIG.SHOW_SONG_TITLE = not CONFIG.SHOW_SONG_TITLE
-        -- elseif (not current_inputs["P1 L"] or not current_inputs["P1 R"] or not current_inputs["P1 A"] or
-            -- not current_inputs["P1 B"]) and state.input.music_toggle_pressed then
-            -- state.input.music_toggle_pressed = false
-        -- end
-
-        render_ui() -- Render the UI overlay with the current state.
+		-- Render the UI overlay with the current state.
+        render_ui() 
     end
 
 	-- throw debugging text here
-
 	
 	-- advance frame or script will lock up
     emu.frameadvance() -- Advance to the next frame.
