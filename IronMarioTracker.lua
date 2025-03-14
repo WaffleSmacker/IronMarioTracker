@@ -15,7 +15,7 @@ local USER_CONFIG = {}   -- user config, please don't touch this line
 -- text
 USER_CONFIG.FONT = "Lucia Sans Console" --font to use for basic display purposes ***NOT IMPLEMENTED YET***
 -- music/sound
-USER_CONFIG.SHOW_SONG_TITLE = true;   -- weather tracker will show/display the current music track on-screen
+USER_CONFIG.SHOW_SONG_TITLE = false;   -- weather tracker will show/display the current music track on-screen
 USER_CONFIG.TURN_OFF_MUSIC = false;   -- weather tracker will suppress music from playing. TRUE = no music ***NOT IMPLEMENTED YET***
 USER_CONFIG.SONG_TITLE_POS = "bottom left";   --where song/music display will show on-screen ***NOT IMPLEMENTED YET***
 
