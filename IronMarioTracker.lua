@@ -1,5 +1,5 @@
 -- IronMario Tracker Script
-TRACKER_VERSION = "v1.1a"
+TRACKER_VERSION = "v1.1.1.1.1"
 FOR_IRONMARO_VERSION = "v1.1.1"
 -- By WaffleSmacker (https://twitch.tv/WaffleSmacker)
 -- and By KaaniDog (https://twitch.tv/kaanidog)
