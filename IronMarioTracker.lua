@@ -830,13 +830,12 @@ local function render_ui()
 	gui.use_surface("client") -- set client gfx surface
 	gui.clearGraphics()
 	if current_song_title ~= "no song info" then
-		
 		if CONFIG.SHOW_SONG_TITLE or USER_CONFIG.SHOW_SONG_TITLE then
 			local mus_note_bot_y = client.screenheight() - 32
 			gui.drawImage("img/music_note2.png", 12, mus_note_bot_y)
 			local mus_bottom_y = mus_note_bot_y + 3
-			TextHelper.draw(40, mus_bottom_y+1, get_song_name(state.game.song), "black", 16)
-			TextHelper.draw(39, mus_bottom_y, get_song_name(state.game.song), "white", 16)
+			TextHelper.draw(40, mus_bottom_y+1, current_song_title, "black", 16)
+			TextHelper.draw(39, mus_bottom_y, current_song_title, "white", 16)
 		end
 	end
 	gui.use_surface("emu") -- set back to Emu gfx surface
@@ -848,8 +847,8 @@ local function render_ui()
 end
 
 -- ******************** 'HELPER' FUNCS GO HERE ******************** 
--- helper function to get client window points
-	-- to be implemented...
+-- helper function to get calculate font size/etc and screen-spsace/etc
+	-- *** to be implemented ***
 -- helper function to draw text 'GUD'  >:)
 -- can be underloaded or overloaded with any drawstring args
 TextHelper = {}
@@ -906,8 +905,7 @@ end
 
 -- ************************* stuff to DO before main loop ****************************
 load_config()
--- Read stored attempt count and personal best star count from files.
-read_attempts_file()
+read_attempts_file() -- Read stored attempt count and personal best star count from files.
 read_pb_stars_file()
 console.clear() -- Clear the console for a clean output.
 gui.clearGraphics() -- Clear GFX just in-case
