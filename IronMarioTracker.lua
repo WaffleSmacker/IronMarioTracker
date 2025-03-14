@@ -5,6 +5,14 @@
 local json = require("lib.lunajson") -- JSON encoding/decoding library
 local tablex = require("lib.pl.tablex") -- Extended table functions (e.g., deepcopy, deepcompare)
 
+-- BizHawk memory alias/shim
+local readbyte = memory.read_u8
+local readword = memory.read_u16_be
+local writebyte = memory.writebyte
+local writeword = memory.write_u16_be
+local writelong = memory.write_s32_be
+local writefloat = memory.writefloat
+
 -- Main configuration table that holds version info, file paths, memory addresses, and user data.
 local CONFIG = {
     TRACKER_VERSION = '1.1.1',
@@ -24,7 +32,7 @@ local CONFIG = {
         CURRENT_SEED = 0x1cdf80, -- Address for the current run's seed.
         DELAYED_WARP_OP = 0x1a031c, -- Address for delayed warp operation code.
         INTENDED_LEVEL_ID = 0x19f0cc, -- Address for the intended level after a warp.
-        CURRENT_SONG_ID = 0x0a3781 -- Address for the current song ID.
+        CURRENT_SONG_ID = 0x8019EB3C -- Address for the current song ID.
     },
     USER = {
         ATTEMPTS = 0, -- Total number of attempts (will be updated from file).
