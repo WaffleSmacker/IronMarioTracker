@@ -424,13 +424,11 @@ local function update_game_state()
 	-- state: Music
 		state.game.song = MEM_OPS.readword(CONFIG.MEM.CURRENT_SONG_ID)
 	-- state: Mario *******
-		-- important: Read the hurt counter to detect if Mario has taken damage.
-		state.mario.hurt_counter = memory.readbyte(CONFIG.MEM.MARIO.HURT_COUNTER)
-		-- other stuff:
 		state.mario.action = memory.read_u32_be(CONFIG.MEM.MARIO.ACTION)
 		state.mario.flags = memory.read_u32_be(CONFIG.MEM.MARIO.INPUT) -- Read flags from the same address.
 		state.mario.hp = memory.read_u16_be(CONFIG.MEM.HUD.HEALTH)     -- get mario HP from the HUD
 		state.mario.input = memory.read_u16_be(CONFIG.MEM.MARIO.INPUT) -- Duplicate read; ensure the correct width.
+		state.mario.hurt_counter = memory.readbyte(CONFIG.MEM.MARIO.HURT_COUNTER) -- if hurt counter;Mario has taken damage.
 	    -- Read Mario's 3D position from memory.
 		local pos_data = read3float(CONFIG.MEM.MARIO.POS)
 		state.mario.pos = {
