@@ -1,37 +1,41 @@
 -- IronMario Tracker Script
+TRACKER_VERSION = "v1.1a"
+FOR_IRONMARO_VERSION = "v1.1.1"
+-- By WaffleSmacker (https://twitch.tv/WaffleSmacker)
+-- and By KaaniDog (https://twitch.tv/kaanidog)
 -- This script tracks various aspects of a run (attempt count, stars, warp mapping, etc.) by reading emulator memory,
 -- logging data to files, and rendering an on-screen overlay.
 -- It uses lunajson for JSON encoding and pl.tablex for deep table functions.
 local json = require("lib.lunajson") -- JSON encoding/decoding library
 local tablex = require("lib.pl.tablex") -- Extended table functions (e.g., deepcopy, deepcompare)
-local EZ_config = {}   -- please don't touch this line
+local USER_CONFIG = {}   -- user config, please don't touch this line
 
--- *************** 'EZ' config for 'normie' users ***************
+-- *************** 'easy' USER PREFERENCES ***************
 -- please adjust your default preferences BELOW ----->
 -- text
-EZ_config.FONT = "Lucia Sans Console" --font to use for basic display purposes ***NOT IMPLEMENTED YET***
+USER_CONFIG.FONT = "Lucia Sans Console" --font to use for basic display purposes ***NOT IMPLEMENTED YET***
 -- music/sound
-EZ_config.TURN_OFF_MUSIC = false;   -- weather tracker will suppress music from playing. TRUE = no music ***NOT IMPLEMENTED YET***
-EZ_config.SHOW_SONG_TITLE = true;   -- weather tracker will show/display the current music track on-screen
-EZ_config.SONG_TITLE_POS = "bottom left";   --where song/music display will show on-screen ***NOT IMPLEMENTED YET***
+USER_CONFIG.SHOW_SONG_TITLE = true;   -- weather tracker will show/display the current music track on-screen
+USER_CONFIG.TURN_OFF_MUSIC = false;   -- weather tracker will suppress music from playing. TRUE = no music ***NOT IMPLEMENTED YET***
+USER_CONFIG.SONG_TITLE_POS = "bottom left";   --where song/music display will show on-screen ***NOT IMPLEMENTED YET***
 
 -- **************************************************************
 
 -- BizHawk memory alias/shim
 -- /potentially/ allow other emulators to use this script
 -- change MEMOP to correct functions for different emulators later
--- by detecting emulator.
-local MEMOP = {
+-- by detecting emulator or changing below
+local MEM_OPS = {
     -- read:
-    readbyte = memory.read_u8,
-    readword = memory.read_u16_be,
-    readlong = memory.read_u32_be,
-    readfloat = memory.readfloat,
-    -- write:
-    writebyte = memory.writebyte,
-    writeword = memory.write_u16_be,
-    writelong = memory.write_u32_be,
-    writefloat = memory.writefloat
+    readbyte = memory.readbyte,	   -- read a single unsigned byte or 'u8'
+    readword = memory.read_u16_be, -- read an unsigned word: 2 bytes
+    -- readlong = memory.read_u32_be,
+    -- readfloat = memory.readfloat,
+    -- -- write:
+    -- writebyte = memory.writebyte,
+    -- writeword = memory.write_u16_be,
+    -- writelong = memory.write_u32_be,
+    -- writefloat = memory.writefloat
 }
 
 -- Main configuration table that holds version info, file paths, memory addresses, and user data.
@@ -46,14 +50,15 @@ local CONFIG = {
         SONG_INFO = 'usr/song_info.txt', -- File for storing song info. (Location, Title)
         WARP_LOG = 'usr/warp_log.json' -- File to log warp map data as JSON.
     },
+	-- use 0x80xxxxxx header to address RDRAM
     MEM = {
-        MARIO_BASE = 0x1a0340, -- Base memory address for Mario-related data.
-        HUD_BASE = 0x1a0330, -- Base memory address for HUD elements.
-        CURRENT_LEVEL_ID = 0x18fd78, -- Address for the current level ID.
-        CURRENT_SEED = 0x1cdf80, -- Address for the current run's seed.
-        DELAYED_WARP_OP = 0x1a031c, -- Address for delayed warp operation code.
-        INTENDED_LEVEL_ID = 0x19f0cc, -- Address for the intended level after a warp.
-        CURRENT_SONG_ID = 0x8019EB3C -- Address for the current song ID.
+        MARIO_BASE =        0x801A0340, -- Base memory address for Mario-related data.
+        HUD_BASE =          0x801A0330, -- Base memory address for HUD elements. ************
+        CURRENT_LEVEL_ID =  0x8018fd78, -- Address for the current level ID.
+        CURRENT_SEED =      0x801cdf80, -- Address for the current run's seed.
+        DELAYED_WARP_OP =   0x801a031c, -- Address for delayed warp operation code.
+        INTENDED_LEVEL_ID = 0x8019f0cc, -- Address for the intended level after a warp.
+        CURRENT_SONG_ID =   0x8019EB3C -- Address for the current song ID.
     },
     USER = {
         ATTEMPTS = 0, -- Total number of attempts (will be updated from file).
@@ -67,13 +72,14 @@ CONFIG.MEM.MARIO = {
     INPUT = CONFIG.MEM.MARIO_BASE + 0x2, -- Address for Mario's input flags or status.
     ACTION = CONFIG.MEM.MARIO_BASE + 0xC, -- Address for Mario's current action/state.
     POS = CONFIG.MEM.MARIO_BASE + 0x3C, -- Address for Mario's 3D position (stored as floats).
-    HURT_COUNTER = CONFIG.MEM.MARIO_BASE + 0xB2 -- Address for a counter indicating recent damage.
+    HURT_COUNTER = CONFIG.MEM.MARIO_BASE + 0xB2, -- Address for a counter indicating recent damage.
+	POWER = CONFIG.MEM.MARIO_BASE + 0xAE, --address for mario's current 'POWER'
 }
 
 -- Memory addresses for HUD-related data.
 CONFIG.MEM.HUD = {
-    STARS = CONFIG.MEM.HUD_BASE + 0x4, -- Address for the number of stars displayed.
-    HEALTH = CONFIG.MEM.HUD_BASE + 0x6 -- Address for Mario's health.
+	STARS = CONFIG.MEM.HUD_BASE + 0x4, -- Address for the number of stars displayed.
+	HEALTH = CONFIG.MEM.HUD_BASE + 0x6 -- Address for Mario's health.
 }
 
 -- Level data configuration including level names and abbreviations.
@@ -278,19 +284,6 @@ CONFIG.MUSIC_DATA = {
     }
 }
 
-memory.usememorydomain("ROM")
-
-local VALID_ROM_VERSION = nil
-
-local rom_signature_bytes = memory.read_bytes_as_array(0x20, 12) -- Read 6 bytes from ROM.
-local rom_signature = string.char(table.unpack(rom_signature_bytes)) -- Convert bytes to string.
-
-if rom_signature == "IronMario 64" then
-    VALID_ROM_VERSION = true
-else
-    VALID_ROM_VERSION = false
-end
-
 -- Define possible run states.
 local run_state = {
     INACTIVE = 0, -- Run has not started.
@@ -424,85 +417,83 @@ end
 local function update_game_state()
     last_state = tablex.deepcopy(state) -- Store the previous state for later comparison.
 
-    state.last_updated_time = os.time() -- Update the timestamp.
-    state.game.delayed_warp_op = MEMOP.readword(CONFIG.MEM.DELAYED_WARP_OP)
-    state.game.intended_level_id = MEMOP.readlong(CONFIG.MEM.INTENDED_LEVEL_ID)
-    state.game.level_id = MEMOP.readword(CONFIG.MEM.CURRENT_LEVEL_ID)
-    state.game.song = MEMOP.readword(CONFIG.MEM.CURRENT_SONG_ID)
-    state.mario.action = MEMOP.readlong(CONFIG.MEM.MARIO.ACTION)
-    state.mario.flags = MEMOP.readlong(CONFIG.MEM.MARIO.INPUT) -- Read flags from the same address.
-    state.mario.hp = MEMOP.readword(CONFIG.MEM.HUD.HEALTH)
-    state.mario.input = MEMOP.readword(CONFIG.MEM.MARIO.INPUT) -- Duplicate read; ensure the correct width.
-    state.run.seed = MEMOP.readlong(CONFIG.MEM.CURRENT_SEED)
-    state.run.stars = MEMOP.readword(CONFIG.MEM.HUD.STARS)
-
-    -- Read Mario's 3D position from memory.
-    local pos_data = read3float(CONFIG.MEM.MARIO.POS)
-    state.mario.pos = {
-        x = pos_data[1],
-        y = pos_data[2],
-        z = pos_data[3]
-    }
-
-    -- Calculate Mario's velocity based on change in position from the previous state.
-    if last_state.mario.pos then
-        state.mario.velocity = {
-            x = state.mario.pos.x - last_state.mario.pos.x,
-            y = state.mario.pos.y - last_state.mario.pos.y,
-            z = state.mario.pos.z - last_state.mario.pos.z
-        }
-    else
-        state.mario.velocity = {
-            x = 0,
-            y = 0,
-            z = 0
-        }
-    end
-
-    -- Determine Mario's status (e.g., in water, taking gas damage, intangible).
-    state.mario.is_in_water = ((state.mario.action & 0xC0) == 0xC0)
-    state.mario.is_in_gas = ((state.mario.input & 0x100) == 0x100)
-    state.mario.is_intangible = ((state.mario.action & 0x1000) == 0x1000)
-    state.mario.has_metal_cap = ((state.mario.flags & 0x4) == 0x4)
-    state.mario.is_taking_gas_damage = (state.mario.is_in_gas and not state.mario.is_intangible and
-                                           not state.mario.has_metal_cap)
-
-    -- Read the hurt counter to detect if Mario has taken damage.
-    state.mario.hurt_counter = memory.readbyte(CONFIG.MEM.MARIO.HURT_COUNTER)
-
-    -- Retrieve abbreviated level names for current and intended levels.
-    local level_abbr = get_level_abbr(state.game.level_id)
-    local intended_level_abbr = get_level_abbr(state.game.intended_level_id)
-
-    -- Update the warp map if not already set, provided that the intended level is valid
-    -- and the current level is not one of the excluded ones (levels 6 and 16).
-    if not state.run.warp_map[intended_level_abbr] and state.game.intended_level_id ~= 0 and state.game.level_id ~= 6 and
-        state.game.level_id ~= 16 then
-        state.run.warp_map[intended_level_abbr] = level_abbr
-    end
-
-    -- If stars have increased since the last state update, record the star collection per level.
-    if state.run.stars > last_state.run.stars then
-        if not state.run.star_map[level_abbr] then
-            state.run.star_map[level_abbr] = 0
-        end
-        state.run.star_map[level_abbr] = state.run.star_map[level_abbr] + 1
-    end
-
-    -- If the level indicates a new run (level_id 16) and the run is not already active, initialize a new run.
-    if state.game.level_id == 16 and state.run.status == run_state.INACTIVE then
-        state.run.status = run_state.ACTIVE
-        state.run.end_reason = nil
-        state.run.pb = false
-        state.run.start_time = os.time() -- Reset the start time.
-        state.run.warp_map = {} -- Clear previous warp data.
-        state.run.star_map = {} -- Clear previous star data.
-        CONFIG.USER.ATTEMPTS = CONFIG.USER.ATTEMPTS + 1 -- Increment the attempt count.
-    end
-
-    if state.game.level_id == 1 and state.run.status == run_state.COMPLETE then
-        state.run.status = run_state.INACTIVE
-    end
+	-- state: Iron Mario 'Meta'/ Current Run/etc, think: seed/etc
+		state.run.seed = memory.read_u32_be(CONFIG.MEM.CURRENT_SEED)
+		state.run.stars = memory.read_u16_be(CONFIG.MEM.HUD.STARS)
+		state.last_updated_time = os.time() -- Update the timestamp.
+	-- state: Music
+		state.game.song = MEM_OPS.readword(CONFIG.MEM.CURRENT_SONG_ID)
+	-- state: Mario *******
+		-- important: Read the hurt counter to detect if Mario has taken damage.
+		state.mario.hurt_counter = memory.readbyte(CONFIG.MEM.MARIO.HURT_COUNTER)
+		-- other stuff:
+		state.mario.action = memory.read_u32_be(CONFIG.MEM.MARIO.ACTION)
+		state.mario.flags = memory.read_u32_be(CONFIG.MEM.MARIO.INPUT) -- Read flags from the same address.
+		state.mario.hp = memory.read_u16_be(CONFIG.MEM.HUD.HEALTH)     -- get mario HP from the HUD
+		state.mario.input = memory.read_u16_be(CONFIG.MEM.MARIO.INPUT) -- Duplicate read; ensure the correct width.
+	    -- Read Mario's 3D position from memory.
+		local pos_data = read3float(CONFIG.MEM.MARIO.POS)
+		state.mario.pos = {
+			x = pos_data[1],
+			y = pos_data[2],
+			z = pos_data[3]
+		}
+		-- Calculate Mario's velocity based on change in position from the previous state.
+		if last_state.mario.pos then
+			state.mario.velocity = {
+				x = state.mario.pos.x - last_state.mario.pos.x,
+				y = state.mario.pos.y - last_state.mario.pos.y,
+				z = state.mario.pos.z - last_state.mario.pos.z
+			}
+		else
+			state.mario.velocity = {
+				x = 0,
+				y = 0,
+				z = 0
+			}
+		end
+	    -- Determine Mario's status (e.g., in water, taking gas damage, intangible).
+		state.mario.is_in_water = ((state.mario.action & 0xC0) == 0xC0)
+		state.mario.is_in_gas = ((state.mario.input & 0x100) == 0x100)
+		state.mario.is_intangible = ((state.mario.action & 0x1000) == 0x1000)
+		state.mario.has_metal_cap = ((state.mario.flags & 0x4) == 0x4)
+		state.mario.is_taking_gas_damage = (state.mario.is_in_gas and not state.mario.is_intangible and 
+			not state.mario.has_metal_cap)
+	
+	-- LEVEL / WARP stuff
+		state.game.delayed_warp_op = memory.read_u16_be(CONFIG.MEM.DELAYED_WARP_OP)
+		state.game.intended_level_id = memory.read_u32_be(CONFIG.MEM.INTENDED_LEVEL_ID)
+		state.game.level_id = memory.read_u16_be(CONFIG.MEM.CURRENT_LEVEL_ID)
+		-- Retrieve abbreviated level names for current and intended levels.
+		local level_abbr = get_level_abbr(state.game.level_id)
+		local intended_level_abbr = get_level_abbr(state.game.intended_level_id)
+		-- Update the warp map if not already set, provided that the intended level is valid
+		-- and the current level is not one of the excluded ones (levels 6 and 16).
+		if not state.run.warp_map[intended_level_abbr] and state.game.intended_level_id ~= 0 and state.game.level_id ~= 6 and
+			state.game.level_id ~= 16 then
+			state.run.warp_map[intended_level_abbr] = level_abbr
+		end
+		-- If stars have increased since the last state update, record the star collection per level.
+		if state.run.stars > last_state.run.stars then
+			if not state.run.star_map[level_abbr] then
+				state.run.star_map[level_abbr] = 0
+			end
+			state.run.star_map[level_abbr] = state.run.star_map[level_abbr] + 1
+		end
+		-- If the level indicates a new run (level_id 16) and the run is not already active, initialize a new run.
+		if state.game.level_id == 16 and state.run.status == run_state.INACTIVE then
+			state.run.status = run_state.ACTIVE
+			state.run.end_reason = nil
+			state.run.pb = false
+			state.run.start_time = os.time() -- Reset the start time.
+			state.run.warp_map = {} -- Clear previous warp data.
+			state.run.star_map = {} -- Clear previous star data.
+			CONFIG.USER.ATTEMPTS = CONFIG.USER.ATTEMPTS + 1 -- Increment the attempt count.
+		end
+		-- completed run (???)
+		if state.game.level_id == 1 and state.run.status == run_state.COMPLETE then
+			state.run.status = run_state.INACTIVE
+		end
 end
 
 -- Check for run-ending conditions (e.g., Mario dying, falling, environmental hazards).
@@ -695,17 +686,6 @@ local function render_ui()
     gui.drawString(game_width + math.floor(ui_width / 2), font_size, "IronMario Tracker", "lightblue", nil, font_size,
         CONFIG.FONT_FACE, nil, "center")
 
-    -- If the running ROM version does not match the compatible version, show an error message.
-    if not VALID_ROM_VERSION then
-        gui.drawString(game_width + math.floor(ui_width / 2), font_size * 10, "Incompatible\nROM version!", "red", nil,
-            font_size * 2, CONFIG.FONT_FACE, nil, "center")
-        gui.drawString(game_width + math.floor(ui_width / 2), font_size * 15,
-            "Expected: " .. CONFIG.COMPATIBLE_ROM_VERSION, "red", nil, font_size, CONFIG.FONT_FACE, nil, "center")
-        gui.drawString(game_width + math.floor(ui_width / 2), font_size * 16, "Running: " .. CONFIG.RUNNING_ROM_VERSION,
-            "red", nil, font_size, CONFIG.FONT_FACE, nil, "center")
-        return -- Stop further UI rendering if ROM version is incompatible.
-    end
-
     -- Render attempt number.
     gui.drawString(game_width, font_size * 3, "Attempt #" .. CONFIG.USER.ATTEMPTS, nil, nil, font_size, CONFIG.FONT_FACE)
 
@@ -720,7 +700,7 @@ local function render_ui()
 
     -- Render current star count and personal best (PB) stars.
     gui.drawString(game_width, font_size * 4, "Stars: " .. state.run.stars, nil, nil, font_size, CONFIG.FONT_FACE)
-    gui.drawString(game_width + math.floor(ui_width / 3), font_size * 4, "PB: " .. CONFIG.USER.PB_STARS, "yellow", nil,
+    gui.drawString(game_width + 23 + math.floor(ui_width / 3), font_size * 4, "PB: " .. CONFIG.USER.PB_STARS, "yellow", nil,
         font_size, CONFIG.FONT_FACE)
 
     -- Render current level name and run seed.
@@ -840,17 +820,84 @@ local function render_ui()
     end
 
     -- Optionally display the current song title if the toggle is enabled.
-    if CONFIG.SHOW_SONG_TITLE and CONFIG.MUSIC_DATA.SONG_MAP[state.game.song] then
-        gui.drawString(20 + math.floor(char_width / 2), game_height - (20 + math.floor(font_size * 1.25)),
-            get_song_name(state.game.song), nil, nil, font_size, CONFIG.FONT_FACE)
-    end
+    -- if USER_CONFIG.SHOW_SONG_TITLE and CONFIG.MUSIC_DATA.SONG_MAP[state.game.song] then
+        -- gui.drawString(20 + math.floor(char_width / 2), game_height - (20 + math.floor(font_size * 1.25)),
+            -- get_song_name(state.game.song), nil, nil, font_size, CONFIG.FONT_FACE)
+    -- end
+
+	if CONFIG.SHOW_SONG_TITLE then
+		gui.use_surface("client") 
+		local mus_note_bot_y = client.screenheight() - 32
+		gui.drawImage("img/music_note2.png", 12, mus_note_bot_y)
+		local mus_bottom_y = mus_note_bot_y + 3
+		TextHelper.draw(40, mus_bottom_y+1, get_song_name(state.game.song), "black", 16)
+		TextHelper.draw(39, mus_bottom_y, get_song_name(state.game.song), "white", 16)
+		gui.use_surface("emu")
+	end
 
     -- Display version information and credits at the bottom right of the UI.
-    gui.drawString(game_width + ui_width, game_height - font_size,
+    gui.drawString(game_width + ui_width, game_height - 5 - font_size,
         "v" .. CONFIG.TRACKER_VERSION .. ' by WaffleSmacker and KaaniDog', "gray", nil,
         math.max(math.floor(font_size / 2), 8), CONFIG.FONT_FACE, nil, "right")
 end
 
+-- ******************** 'HELPER' FUNCS GO HERE ******************** 
+-- helper function to get client window points
+	-- to be implemented...
+-- helper function to draw text 'GUD'  >:)
+-- can be underloaded or overloaded with any drawstring args
+TextHelper = {}
+function TextHelper.draw(x, y, str, color, size)
+    if type(x) == "string" and not y then
+        local parts = {}
+        for p in x:gmatch("[^/]+") do table.insert(parts, p) end
+        x, y, str = tonumber(parts[1]) or 0, tonumber(parts[2]) or 0, parts[3] or x
+    end
+
+    -- Map size strings to numbers, default to 10 if not specified
+    local font_size = 10
+    if size then
+        if type(size) == "number" then
+            font_size = size
+        elseif type(size) == "string" then
+            local sizes = { tiny = 8, smol = 9, small = 10, medium = 11, large = 12, big = 14, huge = 16 }
+            font_size = sizes[size:lower()] or 11
+        end
+    end
+
+    gui.drawString(x or 0, y or 0, str or "Text", color or "white", nil, font_size)
+end
+-- helper -> 'text blinker'
+TextBlinker = {
+    frame = 0,
+    draw = function(x, y, str)
+        local _this = TextBlinker
+        _this.frame = _this.frame + 1
+        if _this.frame % 30 < 15 then
+            gui.drawString(x, y, str, "white", nil, 11)
+        end
+        if _this.frame >= 60 then _this.frame = 0 end
+    end
+}
+
+-- ********************** FIND RANDOMIZER VERSION //DETECTION *****************
+-- note please do not use 'memorydomain', 
+-- reason: incredibly buggy in bizhawk and messes w/ other scripts
+-- it 'sticks' until client is killed/restarted.
+-- use "memory.readbyte(0x000000, "ROM")" instead !
+-- helper Function to get the version string from the ROM:
+function getRandomizerVersion()
+	local map = { [0x39] = "v", [0x3F] = ".", [0x00] = "0" }
+	for i = 1, 9 do map[i] = tostring(i) end
+	local addr, version = 0x80193BED, ""
+	for i = 0, 5 do version = version .. (map[memory.readbyte(addr + i)] or "?") end
+	return version
+end
+-- wrapper 'helper' Function to get the current version of the tracker
+function getTrackerCompatibility()
+	return FOR_IRONMARO_VERSION
+end
+-- ************************* stuff to DO before main loop ****************************
 load_config()
 
 -- Read stored attempt count and personal best star count from files.
@@ -858,11 +905,12 @@ read_attempts_file()
 read_pb_stars_file()
 
 console.clear() -- Clear the console for a clean output.
+gui.clearGraphics() -- Clear GFX just in-case
 
--- Main loop: executes every frame.
-while true do
-    memory.usememorydomain("RDRAM") -- Switch to the RDRAM memory domain for reading game data.
-
+-- is the randomizer compatible with the tracker???
+VERS_COMPATIBLE = getRandomizerVersion() == FOR_IRONMARO_VERSION and true or false
+-- **************************** Main loop: executes every frame ****************************
+while VERS_COMPATIBLE do
     -- Process on every other frame to reduce CPU load.
     if emu.framecount() % 2 == 0 then
         -- Update game state if the run isn't already pending (i.e., if it's still in progress).
@@ -872,27 +920,60 @@ while true do
 
         -- If the run is active, check for any conditions that signal the run is over.
         if state.run.status == run_state.ACTIVE then
-            check_run_over_conditions()
+            --check_run_over_conditions()
         end
 
         -- If a run has ended (pending state), write the run data to files.
         if state.run.status == run_state.PENDING then
-            write_data()
+            --write_data()
         end
 
         -- Handle input: toggle the song title display if specific buttons are pressed.
-        local current_inputs = joypad.get()
-        if current_inputs["P1 L"] and current_inputs["P1 R"] and current_inputs["P1 A"] and current_inputs["P1 B"] and
-            not state.input.music_toggle_pressed then
-            state.input.music_toggle_pressed = true
-            CONFIG.SHOW_SONG_TITLE = not CONFIG.SHOW_SONG_TITLE
-        elseif (not current_inputs["P1 L"] or not current_inputs["P1 R"] or not current_inputs["P1 A"] or
-            not current_inputs["P1 B"]) and state.input.music_toggle_pressed then
-            state.input.music_toggle_pressed = false
-        end
+        -- local current_inputs = joypad.get()
+        -- if current_inputs["P1 L"] and current_inputs["P1 R"] and current_inputs["P1 A"] and current_inputs["P1 B"] and
+            -- not state.input.music_toggle_pressed then
+            -- state.input.music_toggle_pressed = true
+            -- CONFIG.SHOW_SONG_TITLE = not CONFIG.SHOW_SONG_TITLE
+        -- elseif (not current_inputs["P1 L"] or not current_inputs["P1 R"] or not current_inputs["P1 A"] or
+            -- not current_inputs["P1 B"]) and state.input.music_toggle_pressed then
+            -- state.input.music_toggle_pressed = false
+        -- end
 
         render_ui() -- Render the UI overlay with the current state.
     end
 
+	-- throw debugging text here
+
+	
+	-- advance frame or script will lock up
     emu.frameadvance() -- Advance to the next frame.
 end
+-- Fall-through: ***If VERS_COMPATIBLE becomes false, this runs***
+local printed_error = false
+while not VERS_COMPATIBLE do
+	gui.clearGraphics() -- Clear to make blinking visible
+	-- local vars
+	local warn1 = "Tracker and Game VERS appear incompatible..."
+	local warn2 = "please get new VERS (!!!)"
+	local warn3 = "Your IronMario appears to be: " .. getRandomizerVersion()
+	local warn4 = "Your Tracker is made to work with " .. getTrackerCompatibility()
+	local text_x, text_y = 10, 90
+	local box_width, box_height = 300, 70 -- Adjust as needed for text coverage
+	local box_color = 0x800000FF -- 50% transparent blue (ARGB format)
+	-- draw warning 'screen'
+	gui.drawRectangle(text_x - 5, text_y - 5, box_width, box_height, box_color, box_color)
+	TextHelper.draw(10, text_y, warn1)
+	TextHelper.draw(10, text_y+15, warn3)
+	TextHelper.draw(10, text_y+32, warn4)
+    TextBlinker.draw(10, text_y+50, warn2)
+	-- also print out what happened to be helpful
+	if not printed_error then
+		printed_error = true
+		print(warn1)
+		print(warn3)
+		print(warn4)
+		print(warn2)
+	end
+    emu.frameadvance()
+end
+
