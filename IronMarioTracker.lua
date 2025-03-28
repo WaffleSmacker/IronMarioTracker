@@ -5,9 +5,11 @@
 local json = require("lib.lunajson") -- JSON encoding/decoding library
 local tablex = require("lib.pl.tablex") -- Extended table functions (e.g., deepcopy, deepcompare)
 
+local ROM_HASH = "517F8FC2BF1B4D12BDD9C69A161EA1A1DFD69E61"
+
 -- Main configuration table that holds version info, file paths, memory addresses, and user data.
 local CONFIG = {
-    TRACKER_VERSION = '1.1.1',
+    TRACKER_VERSION = '1.1.2',
     FONT_FACE = 'Lucida Console',
     SHOW_SONG_TITLE = false, -- Flag to toggle song title display on the UI.
     FILES = {
@@ -18,13 +20,13 @@ local CONFIG = {
         WARP_LOG = 'usr/warp_log.json' -- File to log warp map data as JSON.
     },
     MEM = {
-        MARIO_BASE = 0x1a0340, -- Base memory address for Mario-related data.
-        HUD_BASE = 0x1a0330, -- Base memory address for HUD elements.
-        CURRENT_LEVEL_ID = 0x18fd78, -- Address for the current level ID.
-        CURRENT_SEED = 0x1cdf80, -- Address for the current run's seed.
-        DELAYED_WARP_OP = 0x1a031c, -- Address for delayed warp operation code.
-        INTENDED_LEVEL_ID = 0x19f0cc, -- Address for the intended level after a warp.
-        CURRENT_SONG_ID = 0x0a3781 -- Address for the current song ID.
+        MARIO_BASE = 0x801b3cdc, -- Base memory address for Mario-related data.
+        HUD_BASE = 0x801c1c60, -- Base memory address for HUD elements.
+        CURRENT_LEVEL_ID = 0x801b1658, -- Address for the current level ID.
+        CURRENT_SEED = 0x801ef8dc, -- Address for the current run's seed.
+        DELAYED_WARP_OP = 0x801c1c4c, -- Address for delayed warp operation code.
+        INTENDED_LEVEL_ID = 0x801c09fc, -- Address for the intended level after a warp.
+        CURRENT_SONG_ID = 0x801b6172 -- Address for the current song ID.
     },
     USER = {
         ATTEMPTS = 0, -- Total number of attempts (will be updated from file).
@@ -249,14 +251,9 @@ CONFIG.MUSIC_DATA = {
     }
 }
 
-memory.usememorydomain("ROM")
-
 local VALID_ROM_VERSION = nil
 
-local rom_signature_bytes = memory.read_bytes_as_array(0x20, 12) -- Read 6 bytes from ROM.
-local rom_signature = string.char(table.unpack(rom_signature_bytes)) -- Convert bytes to string.
-
-if rom_signature == "IronMario 64" then
+if gameinfo.getromhash() == ROM_HASH then
     VALID_ROM_VERSION = true
 else
     VALID_ROM_VERSION = false
@@ -832,8 +829,6 @@ console.clear() -- Clear the console for a clean output.
 
 -- Main loop: executes every frame.
 while true do
-    memory.usememorydomain("RDRAM") -- Switch to the RDRAM memory domain for reading game data.
-
     -- Process on every other frame to reduce CPU load.
     if emu.framecount() % 2 == 0 then
         -- Update game state if the run isn't already pending (i.e., if it's still in progress).
