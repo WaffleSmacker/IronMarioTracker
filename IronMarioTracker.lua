@@ -396,7 +396,7 @@ local function update_game_state()
     state.game.delayed_warp_op = memory.read_u16_be(CONFIG.MEM.DELAYED_WARP_OP)
     state.game.intended_level_id = memory.read_u32_be(CONFIG.MEM.INTENDED_LEVEL_ID)
     state.game.level_id = memory.read_u16_be(CONFIG.MEM.CURRENT_LEVEL_ID)
-    state.game.song = memory.readbyte(CONFIG.MEM.CURRENT_SONG_ID)
+    state.game.song = memory.read_u16_be(CONFIG.MEM.CURRENT_SONG_ID)
     state.mario.action = memory.read_u32_be(CONFIG.MEM.MARIO.ACTION)
     state.mario.flags = memory.read_u32_be(CONFIG.MEM.MARIO.INPUT) -- Read flags from the same address.
     state.mario.hp = memory.read_u16_be(CONFIG.MEM.HUD.HEALTH)
