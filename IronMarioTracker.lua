@@ -5,11 +5,11 @@
 local json = require("lib.lunajson") -- JSON encoding/decoding library
 local tablex = require("lib.pl.tablex") -- Extended table functions (e.g., deepcopy, deepcompare)
 
-local ROM_HASH = "517F8FC2BF1B4D12BDD9C69A161EA1A1DFD69E61"
+local ROM_HASH = "7EE741D097C660E74330FAB27FC83727592A57EA"
 
 -- Main configuration table that holds version info, file paths, memory addresses, and user data.
 local CONFIG = {
-    TRACKER_VERSION = '1.1.2',
+    TRACKER_VERSION = '1.2',
     FONT_FACE = 'Lucida Console',
     SHOW_SONG_TITLE = false, -- Flag to toggle song title display on the UI.
     FILES = {
@@ -20,13 +20,13 @@ local CONFIG = {
         WARP_LOG = 'usr/warp_log.json' -- File to log warp map data as JSON.
     },
     MEM = {
-        MARIO_BASE = 0x801b3cdc, -- Base memory address for Mario-related data.
-        HUD_BASE = 0x801c1c60, -- Base memory address for HUD elements.
-        CURRENT_LEVEL_ID = 0x801b1658, -- Address for the current level ID.
-        CURRENT_SEED = 0x801ef8dc, -- Address for the current run's seed.
-        DELAYED_WARP_OP = 0x801c1c4c, -- Address for delayed warp operation code.
-        INTENDED_LEVEL_ID = 0x801c09fc, -- Address for the intended level after a warp.
-        CURRENT_SONG_ID = 0x801b6172 -- Address for the current song ID.
+        MARIO_BASE = 0x801e1940, -- Base memory address for Mario-related data.
+        HUD_BASE = 0x801e1930, -- Base memory address for HUD elements.
+        CURRENT_LEVEL_ID = 0x801d0508, -- Address for the current level ID.
+        CURRENT_SEED = 0x8020f5b8, -- Address for the current run's seed.
+        DELAYED_WARP_OP = 0x801e191c, -- Address for delayed warp operation code.
+        INTENDED_LEVEL_ID = 0x801e06cc, -- Address for the intended level after a warp.
+        CURRENT_SONG_ID = 0x801d522e -- Address for the current song ID.
     },
     USER = {
         ATTEMPTS = 0, -- Total number of attempts (will be updated from file).
@@ -252,7 +252,7 @@ CONFIG.MUSIC_DATA = {
 }
 
 local VALID_ROM_VERSION = nil
-
+print(gameinfo.getromhash())
 if gameinfo.getromhash() == ROM_HASH then
     VALID_ROM_VERSION = true
 else
@@ -278,9 +278,6 @@ local state = {
         stars = 0, -- Total stars collected during the run.
         warp_map = {}, -- Map of intended warp destinations to actual warp outcomes.
         star_map = {}, -- Mapping of levels to star counts collected.
-        start_time = os.time(), -- Timestamp for when the run started.
-        last_updated_time = os.time(), -- Last time the state was updated.
-        end_time = os.time() -- Timestamp for when the run ended (initially same as start).
     },
     game = {
         level_id = 1 -- Current level ID; default value.
@@ -288,7 +285,7 @@ local state = {
 }
 
 local BACKGROUND_IMAGES = {"(None)", "Cave", "City", "Desert", "Fire", "Forest", "Mountains", "Ocean", "Pattern", "Sky",
-                           "Storm"}
+                           "Storm", "CaptWaffle"}
 
 -- Table to store the previous state (for change detection in UI rendering).
 local last_state = {}
@@ -305,7 +302,7 @@ local function init_attempt_data_file()
 
     file = io.open(CONFIG.FILES.ATTEMPT_DATA, "w")
     if file then
-        file:write("AttemptNumber,SeedKey,TimeStamp,Stars,TimeTaken,EndLevel,EndCause,StarsCollected\n")
+        file:write("AttemptNumber,SeedKey,TimeStamp,Stars,EndLevel,EndCause,StarsCollected\n")
         file:close()
     end
 end
@@ -462,7 +459,6 @@ local function update_game_state()
         state.run.status = run_state.ACTIVE
         state.run.end_reason = nil
         state.run.pb = false
-        state.run.start_time = os.time() -- Reset the start time.
         state.run.warp_map = {} -- Clear previous warp data.
         state.run.star_map = {} -- Clear previous star data.
         CONFIG.USER.ATTEMPTS = CONFIG.USER.ATTEMPTS + 1 -- Increment the attempt count.
@@ -499,7 +495,6 @@ local function check_run_over_conditions()
 
     -- If an end reason is determined, mark the run as pending and record the end time.
     if state.run.end_reason then
-        state.run.end_time = os.time()
         state.run.status = run_state.PENDING
 
         -- Check if the current star count is a new personal best.
@@ -522,10 +517,8 @@ end
 local function write_run_data_csv()
     local seed_key = string.format("%s_%s", state.run.seed, os.date("%Y%m%d%H%M%S"))
     local attempt_number = CONFIG.USER.ATTEMPTS
-    local timestamp = os.date("%Y-%m-%d %H:%M:%S", state.run.start_time)
     local stars = state.run.stars or 0
     local level_name = get_level_name(state.game.level_id)
-    local time_taken = state.run.end_time - state.run.start_time
 
     -- Create a summary string for stars collected per level.
     local stars_collected = ""
@@ -538,7 +531,7 @@ local function write_run_data_csv()
 
     -- Format the CSV line with all relevant run data.
     local csv_line = string.format("%d,%s,%s,%d,%s,%s,%s,%s\n", attempt_number, seed_key, timestamp, stars,
-        format_time(time_taken), level_name, state.run.end_reason, stars_collected)
+        level_name, state.run.end_reason, stars_collected)
 
     -- Append the CSV line to the attempt data file.
     local file = io.open(CONFIG.FILES.ATTEMPT_DATA, "a")
@@ -676,15 +669,6 @@ local function render_ui()
 
     -- Render attempt number.
     gui.drawString(game_width, font_size * 3, "Attempt #" .. CONFIG.USER.ATTEMPTS, nil, nil, font_size, CONFIG.FONT_FACE)
-
-    -- Render elapsed time depending on whether the run is still active.
-    if state.run.status == run_state.ACTIVE then
-        gui.drawString(game_width, font_size * 5, "Time: " .. format_time(os.time() - state.run.start_time), nil, nil,
-            font_size, CONFIG.FONT_FACE)
-    else
-        gui.drawString(game_width, font_size * 5, "Time: " .. format_time(state.run.end_time - state.run.start_time),
-            nil, nil, font_size, CONFIG.FONT_FACE)
-    end
 
     -- Render current star count and personal best (PB) stars.
     gui.drawString(game_width, font_size * 4, "Stars: " .. state.run.stars, nil, nil, font_size, CONFIG.FONT_FACE)
