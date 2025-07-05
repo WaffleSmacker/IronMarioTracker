@@ -530,7 +530,7 @@ local function write_run_data_csv()
     end
 
     -- Format the CSV line with all relevant run data.
-    local csv_line = string.format("%d,%s,%s,%d,%s,%s,%s,%s\n", attempt_number, seed_key, timestamp, stars,
+    local csv_line = string.format("%d,%s,%s,%d,%s,%s,%s\n", attempt_number, seed_key, timestamp, stars,
         level_name, state.run.end_reason, stars_collected)
 
     -- Append the CSV line to the attempt data file.
