@@ -12,6 +12,7 @@ local CONFIG = {
     TRACKER_VERSION = '1.2',
     FONT_FACE = 'Lucida Console',
     SHOW_SONG_TITLE = false, -- Flag to toggle song title display on the UI.
+    SHOW_CAP_TIMER = false, -- Flag to toggle cap timer display on the UI.
     FILES = {
         ATTEMPT_COUNT = 'usr/attempts.txt', -- File to record total attempt count.
         ATTEMPT_DATA = 'usr/attempts_data.csv', -- CSV file for detailed run attempt data.
@@ -40,7 +41,8 @@ CONFIG.MEM.MARIO = {
     INPUT = CONFIG.MEM.MARIO_BASE + 0x2, -- Address for Mario's input flags or status.
     ACTION = CONFIG.MEM.MARIO_BASE + 0xC, -- Address for Mario's current action/state.
     POS = CONFIG.MEM.MARIO_BASE + 0x3C, -- Address for Mario's 3D position (stored as floats).
-    HURT_COUNTER = CONFIG.MEM.MARIO_BASE + 0xB2 -- Address for a counter indicating recent damage.
+    HURT_COUNTER = CONFIG.MEM.MARIO_BASE + 0xB2, -- Address for a counter indicating recent damage.
+    CAP_TIMER = CONFIG.MEM.MARIO_BASE + 0xBE -- Address for counting time remaining on cap.
 }
 
 -- Memory addresses for HUD-related data.
@@ -396,6 +398,7 @@ local function update_game_state()
     state.game.song = memory.read_u16_be(CONFIG.MEM.CURRENT_SONG_ID)
     state.mario.action = memory.read_u32_be(CONFIG.MEM.MARIO.ACTION)
     state.mario.flags = memory.read_u32_be(CONFIG.MEM.MARIO.INPUT) -- Read flags from the same address.
+    state.mario.cap_timer = memory.read_u16_be(CONFIG.MEM.MARIO.CAP_TIMER)
     state.mario.hp = memory.read_u16_be(CONFIG.MEM.HUD.HEALTH)
     state.mario.input = memory.read_u16_be(CONFIG.MEM.MARIO.INPUT) -- Duplicate read; ensure the correct width.
     state.run.seed = memory.read_u32_be(CONFIG.MEM.CURRENT_SEED)
@@ -567,6 +570,7 @@ local function load_config()
         if config_data then
             CONFIG.BACKGROUND_IMAGE = config_data.BACKGROUND_IMAGE
             CONFIG.SHOW_SONG_TITLE = config_data.SHOW_SONG_TITLE
+            CONFIG.SHOW_CAP_TIMER = config_data.SHOW_CAP_TIMER
         end
         file:close()
     end
@@ -578,7 +582,8 @@ local function save_config()
     if file then
         local config_data = {
             BACKGROUND_IMAGE = CONFIG.BACKGROUND_IMAGE,
-            SHOW_SONG_TITLE = CONFIG.SHOW_SONG_TITLE
+            SHOW_SONG_TITLE = CONFIG.SHOW_SONG_TITLE,
+            SHOW_CAP_TIMER = CONFIG.SHOW_CAP_TIMER
         }
         file:write(json.encode(config_data))
         file:close()
@@ -605,7 +610,7 @@ local function render_ui()
     -- Call a placeholder function if the left mouse button is pressed when the mouse is within the logo image.
     if input.getmouse().Left and input.getmouse().X >= game_width and input.getmouse().X <= (game_width + logo_size) and
         input.getmouse().Y >= (game_height - (logo_size + 20)) and input.getmouse().Y <= game_height and not config_form then
-        config_form = forms.newform(210, 110, "Configuration", function()
+        config_form = forms.newform(210, 140, "Configuration", function()
             forms.destroy(config_form)
             config_form = nil
         end)
@@ -619,24 +624,30 @@ local function render_ui()
         forms.setproperty(background_image_dropdown, "SelectedItem", CONFIG.BACKGROUND_IMAGE)
 
         -- Add a checkbox to toggle the song title display.
-        local show_song_title_checkbox_label = forms.label(config_form, "Show Song Title", 30, 41, 100, 20)
+        local show_song_title_checkbox_label = forms.label(config_form, "Show Song Title", 30, 45, 100, 20)
         local show_song_title_checkbox = forms.checkbox(config_form, nil, 13, 40)
         forms.setproperty(show_song_title_checkbox, "Checked", CONFIG.SHOW_SONG_TITLE)
+
+        -- Add a checkbox to toggle the song title display.
+        local show_cap_timer_checkbox_label = forms.label(config_form, "Show Cap Timer", 30, 72, 100, 20)
+        local show_cap_timer_checkbox = forms.checkbox(config_form, nil, 13, 67)
+        forms.setproperty(show_cap_timer_checkbox, "Checked", CONFIG.SHOW_CAP_TIMER)
 
         -- Add a button to save the configuration.
         forms.button(config_form, "OK", function()
             CONFIG.BACKGROUND_IMAGE = forms.getproperty(background_image_dropdown, "SelectedItem")
             CONFIG.SHOW_SONG_TITLE = forms.ischecked(show_song_title_checkbox)
+            CONFIG.SHOW_CAP_TIMER = forms.ischecked(show_cap_timer_checkbox)
             save_config()
             forms.destroy(config_form)
             config_form = nil
-        end, 10, 70, 90, 30)
+        end, 10, 100, 90, 30)
 
         -- Add a button to close the configuration form.
         forms.button(config_form, "Cancel", function()
             forms.destroy(config_form)
             config_form = nil
-        end, 110, 70, 90, 30)
+        end, 110, 100, 90, 30)
     end
 
     -- Skip rendering if no changes in state (to save processing).
@@ -679,6 +690,11 @@ local function render_ui()
     gui.drawString(game_width, font_size * 6, "Level: " .. get_level_name(state.game.level_id), nil, nil, font_size,
         CONFIG.FONT_FACE)
     gui.drawString(game_width, font_size * 7, "Seed: " .. state.run.seed, nil, nil, font_size, CONFIG.FONT_FACE)
+
+    -- Render cap timer.
+    if state.mario.cap_timer > 0 and CONFIG.SHOW_CAP_TIMER then
+        gui.drawString(game_width / 2 - 120, game_height - (font_size * 2 + 20 * 4), "Cap Timer: " .. math.floor(state.mario.cap_timer / 30), nil, nil, font_size * 2, CONFIG.FONT_FACE)
+    end
 
     -- If the run is over (pending or complete), display "RUN OVER!" and "NEW PB!" if applicable.
     if state.run.status == run_state.PENDING or state.run.status == run_state.COMPLETE then
