@@ -1,12 +1,17 @@
 # IronMarioTracker
-![image](https://github.com/user-attachments/assets/600140ac-6c05-4884-890e-0fe145800843)
+![image](https://github.com/user-attachments/assets/8143aa9a-f2e9-446b-b36a-e82dae823064)
+
 
 # Download
 Check out the [releases page](https://github.com/WaffleSmacker/IronMarioTracker/releases) to get the most recent version of the tracker.
 Download the IronMarioTracker.zip file.
 
 # Requirements
-This script is fully supported only on the latest version of Bizhawk. Old versions are known to have compatibility problems with more modern Lua code such as that used in the tracker.
+This script is fully supported only on the latest version of Bizhawk.
+
+If you want to use this tracker on PJ64 or Parallel please check out [aglab2's awesome tool](https://github.com/aglab2/LuaEmuPlayer/releases/) and follow the instructions there.
+![image](https://github.com/user-attachments/assets/0fa1b19b-852d-4c5d-b2a1-fba6e13edb9f)
+
 
 # Usage
 Unzip and load this script into the Lua Console of Bizhawk after you load the IronMario ROM.
@@ -18,13 +23,22 @@ The font size of the tracker is determined by the game's resolution. If the trac
 # About
 This tracker was put together to support streamers and gamers alike who are taking on the IronMario challenge.
 To date it can help you by keeping track of your best PB, warp mapping, and tracking where you got your stars.
+**For Streamers** 3 files are auto-generated when you play:
+![image](https://github.com/user-attachments/assets/62816dd9-54c0-4d8b-b31f-a50b800a052f)
+You can use these to auto populate any on stream stats if you would like to.
 
 # Credits
 
 WaffleSmacker for basically everything.
-KaaniDog for making it look a little better and adding **stars**.
+KaaniDog for supporting with re-creating the structure to make the code load more smoothly and extra features!
 
 # Changelog
+
+## v1.201 - 2025-07-07
+This version is now compatible with IronMario64 V1.2
+- Timer was removed as it caused lag for some people
+- "Cap Timer" was added to help players understand when their cap will end
+- Added a few extra backgrounds and fixed the sizes so they are no longer crunched
 
 ## v1.0.2u2 - 2025-02-18
 
