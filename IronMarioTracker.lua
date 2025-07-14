@@ -382,7 +382,7 @@ local state = {
     }
 }
 
-local BACKGROUND_IMAGES = {"(None)", "Cave", "City", "Desert", "Fire", "Forest", "Mountains", "Ocean", "Pattern", "Sky",
+local BACKGROUND_IMAGES = {"(None)", "Cave", "City", "Desert", "Fire", "Forest", "Fuji", "Mountains", "Ocean", "Pattern", "Sky",
                            "Storm", "CaptWaffle"}
 
 -- Table to store the previous state (for change detection in UI rendering).
