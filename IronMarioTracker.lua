@@ -1091,6 +1091,7 @@ local function update_game_state()
                     end
                 end
                 state.run.star_map[course_abbr] = star_count
+                state.run.star_bits[course_abbr] = star_bits
             end
         end
         -- print_star_collection_with_addresses()
@@ -1159,6 +1160,7 @@ local function check_run_over_conditions()
         -- Reset warp information and display when run ends
         state.run.warp_map = {}
         state.run.star_map = {}
+        state.run.star_bits = {}
         show_star_info_page = nil  -- Return to main display
         last_level_for_auto_display = nil  -- Reset auto-display state
 
@@ -1185,10 +1187,11 @@ local function write_run_data_csv()
     local stars = state.run.stars or 0
     local level_name = get_level_name(state.game.level_id)
 
-    -- Create a summary string for stars collected per level.
+    -- Create a summary string for stars collected per level (with bitmask for individual star tracking).
     local stars_collected = ""
     for abbr, count in pairs(state.run.star_map) do
-        stars_collected = stars_collected .. string.format("%s:%d ", abbr, count)
+        local bits = state.run.star_bits[abbr] or 0
+        stars_collected = stars_collected .. string.format("%s:%d:%d ", abbr, count, bits)
     end
     if stars_collected ~= "" then
         stars_collected = stars_collected:sub(1, -2) -- Remove trailing space.
